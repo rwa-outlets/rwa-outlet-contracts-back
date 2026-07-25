@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "back/**"
+      - "backend/**"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
 
       - name: Build and push image
         run: |
-          docker build -t registry.digitalocean.com/rwa-outlets/backend:main ./back
+          docker build -t registry.digitalocean.com/rwa-outlets/backend:main ./backend
           docker push registry.digitalocean.com/rwa-outlets/backend:main
 
       - name: Roll out to cluster
