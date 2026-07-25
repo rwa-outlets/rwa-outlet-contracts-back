@@ -21,8 +21,8 @@
       "startBlock": 11348451
     },
     "OutletRouter": {
-      "address": "0x9C352AE4df4853D25F2691c9183c336E0c112289",
-      "startBlock": 11348471
+      "address": "0x139EAb630E311C278493b0B1fa392871d0c014BF",
+      "startBlock": 11349348
     },
     "RedemptionQueueTbill": {
       "address": "0x782Ee6AA667022A90b5b5522781Ad19aA6C9eD2D",
@@ -59,6 +59,14 @@
     "Faucet": {
       "address": "0xE78E87D994358D17aaf4653d8398f22C93fb758A",
       "startBlock": 11347861
+    },
+    "V4Venue": {
+      "address": "0xf15b24dF29145A35E446e162e247102f5C77C0B4",
+      "startBlock": 11349360
+    },
+    "OutletRouterLegacy": {
+      "address": "0x9C352AE4df4853D25F2691c9183c336E0c112289",
+      "startBlock": 11348471
     }
   }
 }

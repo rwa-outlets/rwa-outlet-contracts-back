@@ -292,6 +292,45 @@
   },
   {
     "type": "function",
+    "name": "quoteBuyAll",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "usdcIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "bestHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "bestOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "viaV4",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "quoteInstant",
     "inputs": [
       {
@@ -318,6 +357,45 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "quoteInstantAll",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "bestHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "bestOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "viaV4",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -468,6 +546,19 @@
   },
   {
     "type": "function",
+    "name": "setV4Venue",
+    "inputs": [
+      {
+        "name": "venue",
+        "type": "address",
+        "internalType": "contract IV4Venue"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "transferOwnership",
     "inputs": [
       {
@@ -478,6 +569,19 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "v4Venue",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IV4Venue"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "event",
@@ -702,6 +806,19 @@
       },
       {
         "name": "registrar",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "V4VenueSet",
+    "inputs": [
+      {
+        "name": "venue",
         "type": "address",
         "indexed": false,
         "internalType": "address"

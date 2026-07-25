@@ -24,6 +24,7 @@ extract "$CORE/out/NavOracle.sol/NavOracle.json"               NavOracle
 extract "$CORE/out/NavExtruction.sol/NavExtruction.json"       NavExtruction
 extract "$CORE/out/ComplianceNFT.sol/ComplianceNFT.json"       ComplianceNFT
 extract "$CORE/out/OutletRouter.sol/OutletRouter.json"         OutletRouter
+extract "$CORE/out/V4Venue.sol/V4Venue.json"                   V4Venue
 extract "$CORE/out/CuratorVault.sol/CuratorVault.json"         CuratorVault
 extract "$CORE/out/RedemptionQueue.sol/RedemptionQueue.json"   RedemptionQueue
 extract "$CORE/out/RWAGateHook.sol/RWAGateHook.json"           RWAGateHook

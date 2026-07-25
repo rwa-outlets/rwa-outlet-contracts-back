@@ -8,7 +8,8 @@
 //   - in-process by the backend's chat agent (src/services/agent.js) via an
 //     InMemoryTransport — no extra process, no port
 //   - standalone over stdio (`npm run mcp`) for Claude Desktop / other MCP hosts
-// Config via env: SUBGRAPH_URL — GraphQL endpoint of the deployed subgraph.
+// Config via env: SUBGRAPH_URL — GraphQL endpoint of the deployed subgraph;
+// GRAPH_API_KEY — Bearer key, required when SUBGRAPH_URL is a gateway endpoint.
 
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { z } = require('zod');
@@ -40,9 +41,13 @@ async function graphqlRequest(query, variables) {
   if (!url) {
     throw new Error('SUBGRAPH_URL is not set — point it at the deployed subgraph query endpoint');
   }
+  const headers = { 'Content-Type': 'application/json' };
+  // The Graph gateway (gateway.thegraph.com) authenticates via Bearer key;
+  // Studio endpoints ignore the extra header.
+  if (env.GRAPH_API_KEY) headers.Authorization = `Bearer ${env.GRAPH_API_KEY}`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ query, variables: variables || undefined }),
   });
   if (!res.ok) {

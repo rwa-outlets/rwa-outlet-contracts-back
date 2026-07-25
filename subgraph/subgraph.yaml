@@ -142,10 +142,10 @@ dataSources:
     name: OutletRouter
     network: sepolia
     source:
-      address: "0x9C352AE4df4853D25F2691c9183c336E0c112289"
+      address: "0x139EAb630E311C278493b0B1fa392871d0c014BF"
       abi: OutletRouter
-      startBlock: 11348471
-    mapping:
+      startBlock: 11349348
+    mapping: &a1
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
@@ -158,6 +158,7 @@ dataSources:
         - V4Pool
         - Asset
         - Queue
+        - Protocol
       abis:
         - name: OutletRouter
           file: ./abis/OutletRouter.json
@@ -168,6 +169,8 @@ dataSources:
       eventHandlers:
         - event: QueueSet(indexed address,address)
           handler: handleQueueSet
+        - event: V4VenueSet(address)
+          handler: handleV4VenueSet
         - event: StrategyRegistered(indexed address,indexed bytes32,indexed
             address,address)
           handler: handleStrategyRegistered
@@ -184,13 +187,49 @@ dataSources:
           handler: handlePatientEnqueued
       file: ./src/router.ts
   - kind: ethereum
+    name: OutletRouterLegacy
+    network: sepolia
+    source:
+      address: "0x9C352AE4df4853D25F2691c9183c336E0c112289"
+      abi: OutletRouter
+      startBlock: 11348471
+    mapping: *a1
+  - kind: ethereum
+    name: V4Venue
+    network: sepolia
+    source:
+      address: "0xf15b24dF29145A35E446e162e247102f5C77C0B4"
+      abi: V4Venue
+      startBlock: 11349360
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - V4Pool
+        - V4Swap
+        - Asset
+        - Account
+      abis:
+        - name: V4Venue
+          file: ./abis/V4Venue.json
+        - name: RWAToken
+          file: ./abis/RWAToken.json
+      eventHandlers:
+        - event: PoolRegistered(indexed address,indexed bytes32,uint24,int24,address)
+          handler: handlePoolRegistered
+        - event: V4Swapped(indexed address,indexed address,indexed
+            address,bool,uint256,uint256)
+          handler: handleV4Swapped
+      file: ./src/v4venue.ts
+  - kind: ethereum
     name: RedemptionQueueTbill
     network: sepolia
     source:
       address: "0x782Ee6AA667022A90b5b5522781Ad19aA6C9eD2D"
       abi: RedemptionQueue
       startBlock: 11348733
-    mapping: &a1
+    mapping: &a2
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
@@ -231,7 +270,7 @@ dataSources:
       address: "0x8eCaFB95ff1E251A9198a766DbECD626bC1d6431"
       abi: RedemptionQueue
       startBlock: 11348733
-    mapping: *a1
+    mapping: *a2
   - kind: ethereum
     name: CuratorVaultExpress
     network: sepolia
@@ -239,7 +278,7 @@ dataSources:
       address: "0x4AaAB2c212dA4d261E5F50F5A97B5d2d3892E204"
       abi: CuratorVault
       startBlock: 11348471
-    mapping: &a2
+    mapping: &a3
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
@@ -299,7 +338,7 @@ dataSources:
       address: "0x4C299f2cE2D07C77e8280a286241e0a30EaD9ae9"
       abi: CuratorVault
       startBlock: 11348471
-    mapping: *a2
+    mapping: *a3
   - kind: ethereum
     name: RWAGateHook
     network: sepolia
@@ -352,7 +391,7 @@ dataSources:
       address: "0x5456E52531085291a35CF0d902aE72D6616b665D"
       abi: RWAToken
       startBlock: 11347863
-    mapping: &a3
+    mapping: &a4
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
@@ -376,7 +415,7 @@ dataSources:
       address: "0xFbca2B3334138C109D51f5101343DE0A35a0eDD9"
       abi: RWAToken
       startBlock: 11347864
-    mapping: *a3
+    mapping: *a4
   - kind: ethereum
     name: Faucet
     network: sepolia

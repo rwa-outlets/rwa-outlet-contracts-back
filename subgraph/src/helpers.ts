@@ -99,6 +99,8 @@ export function ensureV4Pool(poolId: Bytes, timestamp: BigInt): V4Pool {
     pool.lastRate1e18 = ZERO;
     pool.observationCount = 0;
     pool.lastObservationAt = timestamp;
+    pool.swapCount = 0;
+    pool.volumeUsdc = ZERO;
     pool.save();
   }
   return pool;

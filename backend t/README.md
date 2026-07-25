@@ -59,15 +59,18 @@ from indexed chain state, not mock data. The MCP server runs in-process
 
 Providers: Groq (`GROQ_API_KEY` + `GROQ_MODEL`, OpenAI-compatible) is preferred
 when set; Anthropic (`ANTHROPIC_API_KEY`, defaults to `claude-opus-5` with
-server-side refusal fallbacks) otherwise. `SUBGRAPH_URL` is required either way;
-with no provider key the route answers 503 and the rest of the API works as
-before. The MCP server also runs standalone for Claude Desktop / other MCP
-hosts: `SUBGRAPH_URL=... npm run mcp` (stdio transport).
+server-side refusal fallbacks) otherwise. `SUBGRAPH_URL` is required either way
+— it defaults to The Graph gateway endpoint, which also needs `GRAPH_API_KEY`
+(sent as `Authorization: Bearer`); with no provider key the route answers 503
+and the rest of the API works as before. The MCP server also runs standalone
+for Claude Desktop / other MCP hosts: `SUBGRAPH_URL=... GRAPH_API_KEY=... npm
+run mcp` (stdio transport).
 
 ## Deploy
 
 Built and pushed per `terraform/README.md` — `docker build -t
 registry.digitalocean.com/rwa-outlets/backend:main ./backend`. Terraform
 supplies `PORT`, `MONGO_URI`, `JWT_SECRET`, `FRONTEND_URL`, `BASE_URL`,
-`SUBGRAPH_URL`, `GROQ_MODEL`, and `GROQ_API_KEY` (secret) as pod env vars;
+`SUBGRAPH_URL`, `GRAPH_API_KEY` (secret), `GROQ_MODEL`, and `GROQ_API_KEY`
+(secret) as pod env vars;
 `src/env.js` fails fast if any required var is missing.

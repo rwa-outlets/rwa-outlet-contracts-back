@@ -8,10 +8,17 @@ import {
   QueueSet,
   StrategyDelisted,
   StrategyRegistered,
+  V4VenueSet,
 } from "../generated/OutletRouter/OutletRouter";
-import { PatientEnqueue, RouterListing, RouterSwap, TwapGuard } from "../generated/schema";
-import { ensureAccount, ensureAsset, ensureStrategy, ensureV4Pool, eventId } from "./helpers";
+import { PatientEnqueue, RouterListing, RouterSwap, TwapGuard, V4Pool } from "../generated/schema";
+import { ensureAccount, ensureAsset, ensureStrategy, ensureV4Pool, eventId, protocol } from "./helpers";
 import { ensureQueue } from "./queue";
+
+export function handleV4VenueSet(event: V4VenueSet): void {
+  const p = protocol();
+  p.v4Venue = event.params.venue;
+  p.save();
+}
 
 /// Creates the Queue entity as soon as the router points an asset at it, so the
 /// agent can discover queue configs before the first redemption request lands.
@@ -88,21 +95,29 @@ export function handleGuardSet(event: GuardSet): void {
   pool.save();
 }
 
+/// For v4 fills the router reuses the `orderHash` slot for the v4 PoolId
+/// (OutletRouter natspec) — an existing V4Pool entity is the discriminator.
 export function handleInstantExit(event: InstantExit): void {
   const asset = ensureAsset(event.params.asset);
   const account = ensureAccount(event.params.user, event.block.timestamp);
-  const strategy = ensureStrategy(
-    event.params.orderHash,
-    event.address,
-    event.address,
-    event.block.timestamp
-  );
 
   const swap = new RouterSwap(eventId(event));
   swap.kind = "INSTANT_EXIT";
   swap.asset = asset.id;
   swap.user = account.id;
-  swap.strategy = strategy.id;
+  const v4Pool = V4Pool.load(event.params.orderHash);
+  if (v4Pool != null) {
+    swap.venue = "V4";
+    swap.v4Pool = v4Pool.id;
+  } else {
+    swap.venue = "AQUA";
+    swap.strategy = ensureStrategy(
+      event.params.orderHash,
+      event.address,
+      event.address,
+      event.block.timestamp
+    ).id;
+  }
   swap.amountIn = event.params.assetIn;
   swap.amountOut = event.params.usdcOut;
   swap.timestamp = event.block.timestamp;
@@ -113,18 +128,24 @@ export function handleInstantExit(event: InstantExit): void {
 export function handlePurchase(event: Purchase): void {
   const asset = ensureAsset(event.params.asset);
   const account = ensureAccount(event.params.user, event.block.timestamp);
-  const strategy = ensureStrategy(
-    event.params.orderHash,
-    event.address,
-    event.address,
-    event.block.timestamp
-  );
 
   const swap = new RouterSwap(eventId(event));
   swap.kind = "PURCHASE";
   swap.asset = asset.id;
   swap.user = account.id;
-  swap.strategy = strategy.id;
+  const v4Pool = V4Pool.load(event.params.orderHash);
+  if (v4Pool != null) {
+    swap.venue = "V4";
+    swap.v4Pool = v4Pool.id;
+  } else {
+    swap.venue = "AQUA";
+    swap.strategy = ensureStrategy(
+      event.params.orderHash,
+      event.address,
+      event.address,
+      event.block.timestamp
+    ).id;
+  }
   swap.amountIn = event.params.usdcIn;
   swap.amountOut = event.params.assetOut;
   swap.timestamp = event.block.timestamp;

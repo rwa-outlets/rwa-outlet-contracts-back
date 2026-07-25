@@ -19,10 +19,12 @@ const env = {
   BASE_URL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
   // Chat agent (optional — /api/v1/chat/completions returns 503 when no
   // provider key is set). Groq is preferred when both keys are present.
-  // The subgraph endpoint is public, so it ships with a live default.
+  // The Graph gateway endpoint; the gateway rejects unauthenticated requests,
+  // so GRAPH_API_KEY must be set alongside it (sent as Authorization: Bearer).
   SUBGRAPH_URL:
     process.env.SUBGRAPH_URL ||
-    'https://api.studio.thegraph.com/query/1756992/rwa-outlet-contracts-core/version/latest',
+    'https://gateway.thegraph.com/api/deployments/id/QmURaPZkHnH4v4zKjYLZFKsL26KwYr4yonLMv4jXwPKWhe',
+  GRAPH_API_KEY: process.env.GRAPH_API_KEY || null,
   GROQ_API_KEY: process.env.GROQ_API_KEY || null,
   GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || null,

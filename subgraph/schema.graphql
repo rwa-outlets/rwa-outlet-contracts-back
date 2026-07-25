@@ -50,6 +50,8 @@ type Protocol @entity(immutable: false) {
   activeStrategyCount: Int!
   faucetDripCount: Int!
   lastTradeAt: BigInt
+  "Uniswap v4 fallback venue wired into the router (OutletRouter.setV4Venue)"
+  v4Venue: Bytes
 }
 
 type ProtocolDayData @entity(immutable: false) {
@@ -75,6 +77,8 @@ type Asset @entity(immutable: false) {
   navUpdatedAt: BigInt
   "router's current redemption queue for this asset (OutletRouter.setQueue); superseded queues stay as Queue entities but are no longer referenced here"
   queue: Queue
+  "the asset's RWA/USDC Uniswap v4 pool (V4Venue.registerPool)"
+  v4Pool: V4Pool
   navHistory: [NavPoint!]! @derivedFrom(field: "asset")
   tradeCount: Int!
   "RWA units sold into pools (exits), token decimals"
@@ -242,13 +246,23 @@ type RouterListing @entity(immutable: false) {
   delistedAt: BigInt
 }
 
+"Which venue won the router's best-of quote"
+enum RouterVenue {
+  AQUA
+  V4
+}
+
 "OutletRouter execution (best-of across pools / bids / v4)"
 type RouterSwap @entity(immutable: true) {
   id: Bytes! # tx-logIndex
   kind: RouterSwapKind!
+  venue: RouterVenue!
   asset: Asset!
   user: Account!
-  strategy: Strategy!
+  "the winning Aqua listing (null for v4 fills, where orderHash is the v4 PoolId)"
+  strategy: Strategy
+  "the v4 pool that filled (null for Aqua fills)"
+  v4Pool: V4Pool
   "RWA for INSTANT_EXIT, USDC for PURCHASE"
   amountIn: BigInt!
   "USDC for INSTANT_EXIT, RWA for PURCHASE"
@@ -495,14 +509,40 @@ type VaultQueueClaim @entity(immutable: true) {
 "Uniswap v4 RWA/USDC pool observed by RWAGateHook"
 type V4Pool @entity(immutable: false) {
   id: Bytes! # v4 PoolId
-  "set once the router's TWAP guard links the pool to an asset"
+  "linked by V4Venue.PoolRegistered or the router's GuardSet"
   asset: Asset
+  "pool config from V4Venue.PoolRegistered (null if only seen via GuardSet/observations)"
+  fee: Int
+  tickSpacing: Int
+  hooks: Bytes
+  registeredAt: BigInt
   lastSqrtPriceX96: BigInt!
   "last USDC-per-RWA spot, 1e18 (0 when not derivable)"
   lastRate1e18: BigInt!
   observationCount: Int!
   lastObservationAt: BigInt!
+  "swaps executed through V4Venue (router-routed or direct)"
+  swapCount: Int!
+  "cumulative USDC side of venue swaps, 6 decimals"
+  volumeUsdc: BigInt!
   observations: [Observation!]! @derivedFrom(field: "pool")
+  swaps: [V4Swap!]! @derivedFrom(field: "pool")
+}
+
+"One swap through the V4Venue (the router's Uniswap v4 fallback lane)"
+type V4Swap @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  pool: V4Pool
+  asset: Asset!
+  "the account the hook's compliance gate checked (the end user)"
+  user: Account!
+  recipient: Bytes!
+  "true = RWA→USDC exit, false = USDC→RWA purchase"
+  assetForUsdc: Boolean!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
 }
 
 type Observation @entity(immutable: true) {
@@ -522,6 +562,7 @@ type Account @entity(immutable: false) {
   id: Bytes! # address
   firstSeenAt: BigInt!
   routerSwaps: [RouterSwap!]! @derivedFrom(field: "user")
+  v4Swaps: [V4Swap!]! @derivedFrom(field: "user")
   queueRequests: [QueueRequest!]! @derivedFrom(field: "controller")
   vaultRequests: [VaultRedeemRequest!]! @derivedFrom(field: "controller")
   drips: [FaucetDrip!]! @derivedFrom(field: "to")

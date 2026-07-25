@@ -15,6 +15,16 @@ const START_BLOCK = process.env.START_BLOCK ? Number(process.env.START_BLOCK) : 
 
 const dep = JSON.parse(readFileSync(join(CORE, "deployments", `${CHAIN_ID}.json`), "utf8"));
 
+// Uniswap v4 lane addresses live in a separate file written by SetupV4Pool.s.sol.
+try {
+  const v4 = JSON.parse(
+    readFileSync(join(CORE, "deployments", `${CHAIN_ID}.v4.json`), "utf8")
+  );
+  dep.V4Venue = v4.V4Venue;
+} catch {
+  // v4 lane not deployed on this chain — the V4Venue data source keeps its old entry
+}
+
 // dataSource name in subgraph.yaml -> key in deployments/<chainid>.json
 const DATA_SOURCES = {
   Aqua: "Aqua",
@@ -23,6 +33,7 @@ const DATA_SOURCES = {
   NavExtruction: "NavExtruction",
   ComplianceNFT: "ComplianceNFT",
   OutletRouter: "OutletRouter",
+  V4Venue: "V4Venue",
   RedemptionQueueTbill: "RedemptionQueue_rwaTBILL",
   RedemptionQueueCredit: "RedemptionQueue_rwaCREDIT",
   CuratorVaultExpress: "CuratorVault_Express",
@@ -34,15 +45,30 @@ const DATA_SOURCES = {
   Faucet: "Faucet",
 };
 
+// Superseded deployments we keep indexing for history — never overwritten by the sync.
+// (The pre-v4 router; its state was migrated to the current router at block 11349348.)
+const PINNED = {
+  OutletRouterLegacy: {
+    address: "0x9C352AE4df4853D25F2691c9183c336E0c112289",
+    startBlock: 11348471,
+  },
+};
+
 const networksPath = join(here, "../networks.json");
 const networks = JSON.parse(readFileSync(networksPath, "utf8"));
 networks[NETWORK] ??= {};
 for (const [ds, key] of Object.entries(DATA_SOURCES)) {
-  if (!dep[key]) throw new Error(`deployments JSON is missing "${key}"`);
+  if (!dep[key]) {
+    if (ds === "V4Venue" && networks[NETWORK][ds]) continue; // keep existing entry
+    throw new Error(`deployments JSON is missing "${key}"`);
+  }
   networks[NETWORK][ds] = {
     address: dep[key],
     startBlock: START_BLOCK ?? networks[NETWORK][ds]?.startBlock ?? 0,
   };
+}
+for (const [ds, entry] of Object.entries(PINNED)) {
+  networks[NETWORK][ds] = entry;
 }
 writeFileSync(networksPath, JSON.stringify(networks, null, 2) + "\n");
 console.log(`networks.json updated for "${NETWORK}" from deployments/${CHAIN_ID}.json`);
