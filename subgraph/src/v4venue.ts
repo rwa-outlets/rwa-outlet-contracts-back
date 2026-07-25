@@ -9,7 +9,7 @@ export function handlePoolRegistered(event: PoolRegistered): void {
   const pool = ensureV4Pool(event.params.poolId, event.block.timestamp);
 
   pool.asset = asset.id;
-  pool.fee = event.params.fee.toI32();
+  pool.fee = event.params.fee;
   pool.tickSpacing = event.params.tickSpacing;
   pool.hooks = event.params.hooks;
   pool.registeredAt = event.block.timestamp;
