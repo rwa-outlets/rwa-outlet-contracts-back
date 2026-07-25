@@ -5,18 +5,24 @@
 // runs in-process over an InMemoryTransport. Only assistant text is surfaced —
 // tool traffic stays server-side.
 //
-// Providers (picked from env): Groq (OpenAI-compatible, GROQ_API_KEY +
-// GROQ_MODEL) preferred; Anthropic (ANTHROPIC_API_KEY) as fallback.
+// Providers (picked from env): OpenAI (OPENAI_API_KEY + OPENAI_MODEL)
+// preferred; Groq (GROQ_API_KEY + GROQ_MODEL) next; Anthropic
+// (ANTHROPIC_API_KEY) as fallback. OpenAI and Groq share the same
+// chat-completions wire format, so they run through one loop.
 
 const Anthropic = require('@anthropic-ai/sdk');
 const Groq = require('groq-sdk');
+const OpenAI = require('openai');
 const { Client: McpClient } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { server: subgraphServer } = require('../mcp/subgraph-server');
 const env = require('../env');
 
-const PROVIDER = env.GROQ_API_KEY ? 'groq' : (env.ANTHROPIC_API_KEY ? 'anthropic' : null);
-const MODEL = PROVIDER === 'groq' ? env.GROQ_MODEL : env.ANTHROPIC_MODEL;
+const PROVIDER = env.OPENAI_API_KEY ? 'openai'
+  : env.GROQ_API_KEY ? 'groq'
+    : env.ANTHROPIC_API_KEY ? 'anthropic' : null;
+const MODEL = PROVIDER === 'openai' ? env.OPENAI_MODEL
+  : PROVIDER === 'groq' ? env.GROQ_MODEL : env.ANTHROPIC_MODEL;
 const MAX_TOOL_ITERATIONS = 10;
 
 // A run must finish inside the caller's time budget (the nginx ingress kills
@@ -142,38 +148,55 @@ function normalizeMessages(openaiMessages) {
   return { extraSystem, turns };
 }
 
-// --------------------------------------------------------- Groq (OpenAI-style)
+// ------------------------------------- OpenAI-style loop (OpenAI and Groq)
 
 let groqClient = null;
+let openaiClient = null;
+
+function getOpenAIStyleClient() {
+  if (PROVIDER === 'openai') {
+    if (!openaiClient) openaiClient = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+    return openaiClient;
+  }
+  if (!groqClient) groqClient = new Groq({ apiKey: env.GROQ_API_KEY });
+  return groqClient;
+}
 
 // Free-tier Groq enforces small tokens-per-minute budgets and counts
 // max_completion_tokens toward request size — keep the cap modest and retry
-// once the window resets when we trip the limit mid-loop.
+// once the window resets when we trip the limit mid-loop. OpenAI reasoning
+// models spend hidden tokens from the same budget, so they get more headroom.
 const GROQ_MAX_COMPLETION_TOKENS = Number(process.env.GROQ_MAX_COMPLETION_TOKENS || 2048);
+const OPENAI_MAX_COMPLETION_TOKENS = Number(process.env.OPENAI_MAX_COMPLETION_TOKENS || 8192);
 
-async function groqCreateWithRetry(params, deadline, attempts = 3) {
+async function createWithRetry(client, params, deadline, attempts = 3) {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await groqClient.chat.completions.create(params);
+      return await client.chat.completions.create(params);
     } catch (err) {
-      const rateLimited = err.status === 429 || err.status === 413;
+      // A quota-exhausted 429 is permanent until billing changes — never retry.
+      const quotaDead = err.code === 'insufficient_quota'
+        || err.error?.code === 'insufficient_quota';
+      const rateLimited = (err.status === 429 || err.status === 413) && !quotaDead;
       // Groq occasionally 400s when the model emits malformed tool-call JSON.
       const flakyToolCall = err.status === 400
-        && /tool_use_failed|failed_generation/i.test(JSON.stringify(err.error || {}));
+        && /tool_use_failed|failed_generation|parse tool call/i.test(
+          JSON.stringify(err.error || {}) + err.message,
+        );
       if (!(rateLimited || flakyToolCall) || attempt >= attempts) throw err;
       const retryAfter = rateLimited
         ? (Number(err.headers?.get?.('retry-after')) || 10) : 1;
       const waitMs = Math.min(retryAfter, 30) * 1000;
       // Never wait past the run's deadline — fail now with the real error.
       if (waitMs + 2000 > timeLeft(deadline)) throw err;
-      console.log(`[agent] groq rate-limited, retrying in ${waitMs / 1000}s (attempt ${attempt}/${attempts})`);
+      console.log(`[agent] ${PROVIDER} rate-limited, retrying in ${waitMs / 1000}s (attempt ${attempt}/${attempts})`);
       await new Promise((r) => { setTimeout(r, waitMs); });
     }
   }
 }
 
-async function runGroq(openaiMessages, onTextDelta, deadline) {
-  if (!groqClient) groqClient = new Groq({ apiKey: env.GROQ_API_KEY });
+async function runOpenAIStyle(openaiMessages, onTextDelta, deadline) {
+  const client = getOpenAIStyleClient();
   const { tools } = await getMcp();
   const { extraSystem, turns } = normalizeMessages(openaiMessages);
 
@@ -190,21 +213,26 @@ async function runGroq(openaiMessages, onTextDelta, deadline) {
   const collected = [];
   const trackToolFailure = makeToolFailureTracker();
   // Qwen/QwQ/DeepSeek on Groq are reasoning models — keep <think> out of output.
-  const reasoning = /qwen|qwq|deepseek|r1|gpt-oss/i.test(MODEL)
-    ? { reasoning_format: 'hidden' } : {};
+  // (Groq-only knob; OpenAI rejects unknown params.)
+  const extras = PROVIDER === 'groq'
+    ? (/qwen|qwq|deepseek|r1|gpt-oss/i.test(MODEL) ? { reasoning_format: 'hidden' } : {})
+    // OpenAI streams include usage only when asked.
+    : { stream_options: { include_usage: true } };
+  const maxCompletionTokens = PROVIDER === 'groq'
+    ? GROQ_MAX_COMPLETION_TOKENS : OPENAI_MAX_COMPLETION_TOKENS;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i += 1) {
     if (timeLeft(deadline) < 3000) {
       if (collected.length) return { text: collected.join('\n\n'), usage, stopReason: 'timeout' };
       throw makeError('AGENT_TIMEOUT', 'Ran out of time before producing an answer');
     }
-    const stream = await groqCreateWithRetry({
+    const stream = await createWithRetry(client, {
       model: MODEL,
       messages,
       tools: openaiTools,
-      max_completion_tokens: GROQ_MAX_COMPLETION_TOKENS,
+      max_completion_tokens: maxCompletionTokens,
       stream: true,
-      ...reasoning,
+      ...extras,
     }, deadline);
 
     let content = '';
@@ -247,7 +275,11 @@ async function runGroq(openaiMessages, onTextDelta, deadline) {
         role: 'assistant',
         content: content || null,
         tool_calls: calls.map((c) => ({
-          id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments },
+          id: c.id,
+          type: 'function',
+          // Models sometimes emit "" for no-arg tools; echoing that back makes
+          // the API reject the transcript as unparseable JSON.
+          function: { name: c.name, arguments: c.arguments && c.arguments.trim() ? c.arguments : '{}' },
         })),
       });
       for (const call of calls) {
@@ -365,13 +397,13 @@ async function runClaude(openaiMessages, onTextDelta, deadline) {
 // ingress's ~60s upstream timeout). Resolves with { text, usage, stopReason }.
 async function runAgent(openaiMessages, onTextDelta, timeBudgetMs) {
   if (!PROVIDER) {
-    throw makeError('AGENT_NOT_CONFIGURED', 'No chat provider configured (set GROQ_API_KEY or ANTHROPIC_API_KEY)');
+    throw makeError('AGENT_NOT_CONFIGURED', 'No chat provider configured (set OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY)');
   }
   const budget = timeBudgetMs || Number(process.env.AGENT_TIME_BUDGET_MS || 50_000);
   const deadline = Date.now() + budget;
-  return PROVIDER === 'groq'
-    ? runGroq(openaiMessages, onTextDelta, deadline)
-    : runClaude(openaiMessages, onTextDelta, deadline);
+  return PROVIDER === 'anthropic'
+    ? runClaude(openaiMessages, onTextDelta, deadline)
+    : runOpenAIStyle(openaiMessages, onTextDelta, deadline);
 }
 
 module.exports = { runAgent, MODEL, PROVIDER };

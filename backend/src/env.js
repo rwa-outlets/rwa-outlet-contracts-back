@@ -18,15 +18,17 @@ const env = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   BASE_URL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
   // Chat agent (optional — /api/v1/chat/completions returns 503 when no
-  // provider key is set). Groq is preferred when both keys are present.
+  // provider key is set). Priority: OpenAI, then Groq, then Anthropic.
   // The Graph gateway endpoint; the gateway rejects unauthenticated requests,
   // so GRAPH_API_KEY must be set alongside it (sent as Authorization: Bearer).
   SUBGRAPH_URL:
     process.env.SUBGRAPH_URL ||
     'https://gateway.thegraph.com/api/deployments/id/Qmb6FUopoDYFrHBZvAazMBH9qsrNVcSgtz8jmUAGKzSqMu',
   GRAPH_API_KEY: process.env.GRAPH_API_KEY || null,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || null,
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-5.4-mini',
   GROQ_API_KEY: process.env.GROQ_API_KEY || null,
-  GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+  GROQ_MODEL: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || null,
   ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
 };
