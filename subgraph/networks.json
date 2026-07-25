@@ -1,19 +1,64 @@
 {
   "sepolia": {
-    "Aqua": { "address": "0xA787Dd5eF559569b068283D2617e0D8484C08e9B", "startBlock": 11348446 },
-    "AquaSwapVMRouter": { "address": "0xc4D05Fc049B819DAAf2753d5a0D32402b8a76d47", "startBlock": 11348447 },
-    "NavOracle": { "address": "0x49f587A7203C2CE7765CAcdD0D5bf912BF52a692", "startBlock": 11348451 },
-    "NavExtruction": { "address": "0xFD8C2d242e82F7Ba28a2a038461C45481EA3849A", "startBlock": 11348451 },
-    "ComplianceNFT": { "address": "0x82E0649Ec0783985FeB4201f126783bD4fC31031", "startBlock": 11348451 },
-    "OutletRouter": { "address": "0x9C352AE4df4853D25F2691c9183c336E0c112289", "startBlock": 11348471 },
-    "RedemptionQueueTbill": { "address": "0xBf14ed0b9E2d3A167f9119082440A91C9C810472", "startBlock": 11348471 },
-    "RedemptionQueueCredit": { "address": "0xb12EE4D7f546C5B6Cb3EcC2b770B9b6780354502", "startBlock": 11348471 },
-    "CuratorVaultExpress": { "address": "0x4AaAB2c212dA4d261E5F50F5A97B5d2d3892E204", "startBlock": 11348471 },
-    "CuratorVaultPatient": { "address": "0x4C299f2cE2D07C77e8280a286241e0a30EaD9ae9", "startBlock": 11348471 },
-    "RWAGateHook": { "address": "0x06Ae6eeAfC42d4Ca4158Bd3BddC4B14Cc54948C0", "startBlock": 11348473 },
-    "TestUSDC": { "address": "0x062b2F19C852e486b4b913933420957018d1db31", "startBlock": 11347862 },
-    "RwaTbillToken": { "address": "0x5456E52531085291a35CF0d902aE72D6616b665D", "startBlock": 11347863 },
-    "RwaCreditToken": { "address": "0xFbca2B3334138C109D51f5101343DE0A35a0eDD9", "startBlock": 11347864 },
-    "Faucet": { "address": "0xE78E87D994358D17aaf4653d8398f22C93fb758A", "startBlock": 11347861 }
+    "Aqua": {
+      "address": "0xA787Dd5eF559569b068283D2617e0D8484C08e9B",
+      "startBlock": 11348446
+    },
+    "AquaSwapVMRouter": {
+      "address": "0xc4D05Fc049B819DAAf2753d5a0D32402b8a76d47",
+      "startBlock": 11348447
+    },
+    "NavOracle": {
+      "address": "0x49f587A7203C2CE7765CAcdD0D5bf912BF52a692",
+      "startBlock": 11348451
+    },
+    "NavExtruction": {
+      "address": "0xFD8C2d242e82F7Ba28a2a038461C45481EA3849A",
+      "startBlock": 11348451
+    },
+    "ComplianceNFT": {
+      "address": "0x82E0649Ec0783985FeB4201f126783bD4fC31031",
+      "startBlock": 11348451
+    },
+    "OutletRouter": {
+      "address": "0x9C352AE4df4853D25F2691c9183c336E0c112289",
+      "startBlock": 11348471
+    },
+    "RedemptionQueueTbill": {
+      "address": "0xBf14ed0b9E2d3A167f9119082440A91C9C810472",
+      "startBlock": 11348471
+    },
+    "RedemptionQueueCredit": {
+      "address": "0xb12EE4D7f546C5B6Cb3EcC2b770B9b6780354502",
+      "startBlock": 11348471
+    },
+    "CuratorVaultExpress": {
+      "address": "0x4AaAB2c212dA4d261E5F50F5A97B5d2d3892E204",
+      "startBlock": 11348471
+    },
+    "CuratorVaultPatient": {
+      "address": "0x4C299f2cE2D07C77e8280a286241e0a30EaD9ae9",
+      "startBlock": 11348471
+    },
+    "RWAGateHook": {
+      "address": "0x06Ae6eeAfC42d4Ca4158Bd3BddC4B14Cc54948C0",
+      "startBlock": 11348473
+    },
+    "TestUSDC": {
+      "address": "0x062b2F19C852e486b4b913933420957018d1db31",
+      "startBlock": 11347862
+    },
+    "RwaTbillToken": {
+      "address": "0x5456E52531085291a35CF0d902aE72D6616b665D",
+      "startBlock": 11347863
+    },
+    "RwaCreditToken": {
+      "address": "0xFbca2B3334138C109D51f5101343DE0A35a0eDD9",
+      "startBlock": 11347864
+    },
+    "Faucet": {
+      "address": "0xE78E87D994358D17aaf4653d8398f22C93fb758A",
+      "startBlock": 11347861
+    }
   }
 }

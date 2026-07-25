@@ -1,15 +1,14 @@
 specVersion: 1.2.0
-description: >-
-  RWA Outlets — instant-liquidity market for tokenized RWAs on 1inch Aqua/SwapVM.
-  Indexes pools (Aqua strategies), NavExtruction trades, the OutletRouter, ERC-7540
-  redemption queues, curator vaults, NAV oracle, KYC set, and the Uniswap v4 lane.
+description: RWA Outlets — instant-liquidity market for tokenized RWAs on 1inch
+  Aqua/SwapVM. Indexes pools (Aqua strategies), NavExtruction trades, the
+  OutletRouter, ERC-7540 redemption queues, curator vaults, NAV oracle, KYC set,
+  and the Uniswap v4 lane.
 repository: https://github.com/rwa-outlets
 schema:
   file: ./schema.graphql
 indexerHints:
   prune: auto
 dataSources:
-  # ------------------------------------------------ official 1inch stack
   - kind: ethereum
     name: Aqua
     network: sepolia
@@ -21,7 +20,10 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [Strategy, StrategyBalance, Protocol]
+      entities:
+        - Strategy
+        - StrategyBalance
+        - Protocol
       abis:
         - name: Aqua
           file: ./abis/Aqua.json
@@ -46,7 +48,11 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [Fill, Trade, Strategy, Protocol]
+      entities:
+        - Fill
+        - Trade
+        - Strategy
+        - Protocol
       abis:
         - name: AquaSwapVMRouter
           file: ./abis/AquaSwapVMRouter.json
@@ -54,7 +60,6 @@ dataSources:
         - event: Swapped(bytes32,address,address,address,address,uint256,uint256)
           handler: handleSwapped
       file: ./src/swapVM.ts
-  # ------------------------------------------------------ outlets engine
   - kind: ethereum
     name: NavOracle
     network: sepolia
@@ -66,7 +71,10 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [Asset, NavPoint, OracleKeeper]
+      entities:
+        - Asset
+        - NavPoint
+        - OracleKeeper
       abis:
         - name: NavOracle
           file: ./abis/NavOracle.json
@@ -89,14 +97,21 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [Trade, Strategy, Asset, Protocol, ProtocolDayData, AssetDayData]
+      entities:
+        - Trade
+        - Strategy
+        - Asset
+        - Protocol
+        - ProtocolDayData
+        - AssetDayData
       abis:
         - name: NavExtruction
           file: ./abis/NavExtruction.json
         - name: RWAToken
           file: ./abis/RWAToken.json
       eventHandlers:
-        - event: Trade(indexed bytes32,indexed uint8,indexed address,bool,address,address,uint256,uint256,int256)
+        - event: Trade(indexed bytes32,indexed uint8,indexed
+            address,bool,address,address,uint256,uint256,int256)
           handler: handleTrade
       file: ./src/navExtruction.ts
   - kind: ethereum
@@ -110,7 +125,10 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [KycHolder, ComplianceOperator, Protocol]
+      entities:
+        - KycHolder
+        - ComplianceOperator
+        - Protocol
       abis:
         - name: ComplianceNFT
           file: ./abis/ComplianceNFT.json
@@ -131,29 +149,34 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [RouterListing, RouterSwap, PatientEnqueue, TwapGuard, Strategy, V4Pool, Queue]
+      entities:
+        - RouterListing
+        - RouterSwap
+        - PatientEnqueue
+        - TwapGuard
+        - Strategy
+        - V4Pool
       abis:
         - name: OutletRouter
           file: ./abis/OutletRouter.json
         - name: RWAToken
           file: ./abis/RWAToken.json
       eventHandlers:
-        - event: StrategyRegistered(indexed address,indexed bytes32,indexed address,address)
+        - event: StrategyRegistered(indexed address,indexed bytes32,indexed
+            address,address)
           handler: handleStrategyRegistered
         - event: StrategyDelisted(indexed address,indexed bytes32)
           handler: handleStrategyDelisted
-        - event: QueueSet(indexed address,address)
-          handler: handleQueueSet
         - event: GuardSet(indexed address,address,bytes32,uint32,uint16)
           handler: handleGuardSet
-        - event: InstantExit(indexed address,indexed address,indexed bytes32,uint256,uint256)
+        - event: InstantExit(indexed address,indexed address,indexed
+            bytes32,uint256,uint256)
           handler: handleInstantExit
         - event: Purchase(indexed address,indexed address,indexed bytes32,uint256,uint256)
           handler: handlePurchase
         - event: PatientEnqueued(indexed address,indexed address,indexed uint256,uint256)
           handler: handlePatientEnqueued
       file: ./src/router.ts
-  # ------------------------------------------------- redemption queues
   - kind: ethereum
     name: RedemptionQueueTbill
     network: sepolia
@@ -161,18 +184,26 @@ dataSources:
       address: "0xBf14ed0b9E2d3A167f9119082440A91C9C810472"
       abi: RedemptionQueue
       startBlock: 11348471
-    mapping: &queueMapping
+    mapping: &a1
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [Queue, QueueEpoch, QueueRequest, QueueController, QueueClaim, OperatorApproval, Account]
+      entities:
+        - Queue
+        - QueueEpoch
+        - QueueRequest
+        - QueueController
+        - QueueClaim
+        - OperatorApproval
+        - Account
       abis:
         - name: RedemptionQueue
           file: ./abis/RedemptionQueue.json
         - name: RWAToken
           file: ./abis/RWAToken.json
       eventHandlers:
-        - event: RedeemRequest(indexed address,indexed address,indexed uint256,address,uint256)
+        - event: RedeemRequest(indexed address,indexed address,indexed
+            uint256,address,uint256)
           handler: handleRedeemRequest
         - event: Submitted(indexed uint256,uint256)
           handler: handleSubmitted
@@ -194,8 +225,7 @@ dataSources:
       address: "0xb12EE4D7f546C5B6Cb3EcC2b770B9b6780354502"
       abi: RedemptionQueue
       startBlock: 11348471
-    mapping: *queueMapping
-  # --------------------------------------------------- curator vaults
+    mapping: *a1
   - kind: ethereum
     name: CuratorVaultExpress
     network: sepolia
@@ -203,26 +233,24 @@ dataSources:
       address: "0x4AaAB2c212dA4d261E5F50F5A97B5d2d3892E204"
       abi: CuratorVault
       startBlock: 11348471
-    mapping: &vaultMapping
+    mapping: &a2
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        [
-          Vault,
-          VaultEpoch,
-          VaultRedeemRequest,
-          VaultController,
-          VaultDeposit,
-          VaultClaim,
-          VaultPosition,
-          MandateAsset,
-          RecycleAction,
-          VaultQueueClaim,
-          Strategy,
-          OperatorApproval,
-          Account,
-        ]
+        - Vault
+        - VaultEpoch
+        - VaultRedeemRequest
+        - VaultController
+        - VaultDeposit
+        - VaultClaim
+        - VaultPosition
+        - MandateAsset
+        - RecycleAction
+        - VaultQueueClaim
+        - Strategy
+        - OperatorApproval
+        - Account
       abis:
         - name: CuratorVault
           file: ./abis/CuratorVault.json
@@ -231,7 +259,8 @@ dataSources:
       eventHandlers:
         - event: Deposit(indexed address,indexed address,uint256,uint256)
           handler: handleDeposit
-        - event: RedeemRequest(indexed address,indexed address,indexed uint256,address,uint256)
+        - event: RedeemRequest(indexed address,indexed address,indexed
+            uint256,address,uint256)
           handler: handleRedeemRequest
         - event: Withdraw(indexed address,indexed address,indexed address,uint256,uint256)
           handler: handleWithdraw
@@ -261,8 +290,7 @@ dataSources:
       address: "0x4C299f2cE2D07C77e8280a286241e0a30EaD9ae9"
       abi: CuratorVault
       startBlock: 11348471
-    mapping: *vaultMapping
-  # ------------------------------------------------------ uniswap v4 lane
+    mapping: *a2
   - kind: ethereum
     name: RWAGateHook
     network: sepolia
@@ -274,7 +302,9 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [V4Pool, Observation]
+      entities:
+        - V4Pool
+        - Observation
       abis:
         - name: RWAGateHook
           file: ./abis/RWAGateHook.json
@@ -284,7 +314,6 @@ dataSources:
         - event: ObservationRecorded(indexed bytes32,uint160,uint256)
           handler: handleObservationLegacy
       file: ./src/hook.ts
-  # ------------------------------------------------------ demo tokens
   - kind: ethereum
     name: TestUSDC
     network: sepolia
@@ -292,11 +321,14 @@ dataSources:
       address: "0x062b2F19C852e486b4b913933420957018d1db31"
       abi: RWAToken
       startBlock: 11347862
-    mapping: &usdcMapping
+    mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [Asset, TokenBalance, Vault]
+      entities:
+        - Asset
+        - TokenBalance
+        - Vault
       abis:
         - name: RWAToken
           file: ./abis/RWAToken.json
@@ -311,11 +343,14 @@ dataSources:
       address: "0x5456E52531085291a35CF0d902aE72D6616b665D"
       abi: RWAToken
       startBlock: 11347863
-    mapping: &rwaTokenMapping
+    mapping: &a3
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [Asset, TokenBalance, Vault]
+      entities:
+        - Asset
+        - TokenBalance
+        - Vault
       abis:
         - name: RWAToken
           file: ./abis/RWAToken.json
@@ -332,8 +367,7 @@ dataSources:
       address: "0xFbca2B3334138C109D51f5101343DE0A35a0eDD9"
       abi: RWAToken
       startBlock: 11347864
-    mapping: *rwaTokenMapping
-  # ----------------------------------------------------------- faucet
+    mapping: *a3
   - kind: ethereum
     name: Faucet
     network: sepolia
@@ -345,7 +379,10 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      entities: [FaucetDrip, Account, Protocol]
+      entities:
+        - FaucetDrip
+        - Account
+        - Protocol
       abis:
         - name: Faucet
           file: ./abis/Faucet.json
