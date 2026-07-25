@@ -1,0 +1,38 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "back/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DO container registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Build and push image
+        run: |
+          docker build -t registry.digitalocean.com/rwa-outlets/backend:main ./back
+          docker push registry.digitalocean.com/rwa-outlets/backend:main
+
+      - name: Roll out to cluster
+        run: |
+          doctl kubernetes cluster kubeconfig save rwa-outlets-k8s
+          kubectl rollout restart deployment/backend
+          kubectl rollout status deployment/backend --timeout=180s
