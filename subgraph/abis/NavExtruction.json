@@ -1,0 +1,348 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "oracle",
+        "type": "address",
+        "internalType": "contract NavOracle"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "NAV_ORACLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract NavOracle"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "extruction",
+    "inputs": [
+      {
+        "name": "isStaticContext",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "nextPC",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "query",
+        "type": "tuple",
+        "internalType": "struct SwapQuery",
+        "components": [
+          {
+            "name": "orderHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "maker",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "taker",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenIn",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenOut",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "isExactIn",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      },
+      {
+        "name": "swap",
+        "type": "tuple",
+        "internalType": "struct SwapRegisters",
+        "components": [
+          {
+            "name": "balanceIn",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "balanceOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountIn",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountNetPulled",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "args",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "updatedNextPC",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "choppedLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "updatedSwap",
+        "type": "tuple",
+        "internalType": "struct SwapRegisters",
+        "components": [
+          {
+            "name": "balanceIn",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "balanceOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountIn",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountNetPulled",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "Trade",
+    "inputs": [
+      {
+        "name": "strategyHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "poolId",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "uint8"
+      },
+      {
+        "name": "asset",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "isExit",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "maker",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "taker",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "amountIn",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "rateVsNavBps",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AuctionExpired",
+    "inputs": [
+      {
+        "name": "startTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "duration",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BadArgs",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BandRequiresComputedAmounts",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DecayExitOnly",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DecayMisconfigured",
+    "inputs": [
+      {
+        "name": "startBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "floorBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NavStale",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxStaleness",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RateOutsideNavBand",
+    "inputs": [
+      {
+        "name": "implied1e18",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nav1e18",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "bandBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RecomputeDetected",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SpreadTooLarge",
+    "inputs": [
+      {
+        "name": "bps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TokenPairMismatch",
+    "inputs": [
+      {
+        "name": "tokenIn",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenOut",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
+]

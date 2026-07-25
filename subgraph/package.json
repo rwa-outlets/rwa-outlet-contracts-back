@@ -1,0 +1,17 @@
+{
+  "name": "rwa-outlets-subgraph",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Graph indexer for RWA Outlets — pools, trades, redemption queues, curator vaults, NAV, KYC, Uniswap v4 lane",
+  "scripts": {
+    "sync": "bash scripts/sync-abis.sh && node scripts/sync-addresses.mjs",
+    "codegen": "graph codegen",
+    "build": "graph codegen && graph build --network sepolia",
+    "deploy": "graph deploy rwa-outlets --network sepolia",
+    "test": "graph codegen && graph build --network sepolia"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.98.1",
+    "@graphprotocol/graph-ts": "^0.38.2"
+  }
+}

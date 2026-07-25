@@ -1,0 +1,561 @@
+# RWA Outlets subgraph schema.
+# Sources: rwa-outlet-contracts-core/docs/02-engine-spec.md §7 (events → entities → agent).
+# Everything the curator agent reasons over comes from these entities — no RPC reads.
+
+enum AssetKind {
+  RWA
+  STABLE
+}
+
+enum PoolKind {
+  EXPRESS
+  PATIENT
+  MARKET
+  UNKNOWN
+}
+
+enum StrategySource {
+  VAULT_POOL
+  EXTERNAL
+}
+
+enum QueueEpochStatus {
+  OPEN
+  SUBMITTED
+  SETTLED
+}
+
+enum VaultEpochStatus {
+  OPEN
+  FULFILLED
+}
+
+enum RouterSwapKind {
+  INSTANT_EXIT
+  PURCHASE
+}
+
+# ---------------------------------------------------------------- globals
+
+type Protocol @entity(immutable: false) {
+  id: ID! # singleton "1"
+  network: String!
+  tradeCount: Int!
+  fillCount: Int!
+  "cumulative USDC paid out to instant exiters (6 decimals)"
+  exitVolumeUsdc: BigInt!
+  "cumulative USDC spent buying RWAs through pools (6 decimals)"
+  buyVolumeUsdc: BigInt!
+  kycHolderCount: Int!
+  activeStrategyCount: Int!
+  faucetDripCount: Int!
+  lastTradeAt: BigInt
+}
+
+type ProtocolDayData @entity(immutable: false) {
+  id: ID! # unix day
+  date: Int! # day start, unix seconds
+  tradeCount: Int!
+  exitVolumeUsdc: BigInt!
+  buyVolumeUsdc: BigInt!
+}
+
+# ----------------------------------------------------------------- assets
+
+type Asset @entity(immutable: false) {
+  id: Bytes! # token address
+  symbol: String!
+  name: String!
+  decimals: Int!
+  kind: AssetKind!
+  "compliance-gated transfers active (RWAToken.setGated)"
+  gated: Boolean!
+  "latest oracle NAV, 1e18 (null until first NavUpdated)"
+  nav: BigInt
+  navUpdatedAt: BigInt
+  navHistory: [NavPoint!]! @derivedFrom(field: "asset")
+  tradeCount: Int!
+  "RWA units sold into pools (exits), token decimals"
+  exitVolume: BigInt!
+  exitVolumeUsdc: BigInt!
+  "RWA units bought from pools, token decimals"
+  buyVolume: BigInt!
+  buyVolumeUsdc: BigInt!
+  lastTradeAt: BigInt
+  strategies: [Strategy!]! @derivedFrom(field: "asset")
+  dayData: [AssetDayData!]! @derivedFrom(field: "asset")
+}
+
+type AssetDayData @entity(immutable: false) {
+  id: ID! # asset-day
+  asset: Asset!
+  date: Int!
+  tradeCount: Int!
+  exitVolumeUsdc: BigInt!
+  buyVolumeUsdc: BigInt!
+  "Σ rateVsNavBps over the day's trades — divide by tradeCount for the mean discount"
+  sumRateVsNavBps: BigInt!
+  navClose: BigInt
+  navMin: BigInt
+  navMax: BigInt
+}
+
+"One NavOracle.NavUpdated observation"
+type NavPoint @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  asset: Asset!
+  nav: BigInt! # 1e18
+  timestamp: BigInt!
+  block: BigInt!
+  txHash: Bytes!
+}
+
+type OracleKeeper @entity(immutable: false) {
+  id: Bytes! # keeper address
+  allowed: Boolean!
+  updatedAt: BigInt!
+}
+
+# ------------------------------------------------------------- compliance
+
+type KycHolder @entity(immutable: false) {
+  id: Bytes! # holder address
+  active: Boolean!
+  tokenId: BigInt!
+  mintedAt: BigInt!
+  revokedAt: BigInt
+}
+
+type ComplianceOperator @entity(immutable: false) {
+  id: Bytes! # operator address
+  allowed: Boolean!
+  updatedAt: BigInt!
+}
+
+# ------------------------------------------------- Aqua strategies (pools)
+
+"""
+An Aqua strategy = one shipped order (strategyHash == orderHash): a curator-vault pool,
+a pro maker's pool, or an isolated resting bid. Balances are the maker's live virtual
+inventory backing the pool.
+"""
+type Strategy @entity(immutable: false) {
+  id: Bytes! # strategyHash
+  maker: Bytes!
+  app: Bytes! # the SwapVM router
+  source: StrategySource!
+  kind: PoolKind!
+  "pool id byte carried in the program args (1 Express / 2 Patient / 3 Market)"
+  poolId: Int
+  asset: Asset
+  vault: Vault
+  active: Boolean!
+  shippedAt: BigInt
+  dockedAt: BigInt
+  "listed on the OutletRouter for best-of quoting"
+  listedOnRouter: Boolean!
+  registrar: Bytes
+  # pool params decoded from CuratorVault.PoolCreated (null for external strategies)
+  spreadBps: Int
+  startBps: Int
+  floorBps: Int
+  auctionStartTime: BigInt
+  auctionDuration: BigInt
+  bandBps: Int
+  navMaxStaleness: BigInt
+  "tokens ever pushed to this strategy (needed to zero balances on dock)"
+  tokens: [Bytes!]!
+  balances: [StrategyBalance!]! @derivedFrom(field: "strategy")
+  tradeCount: Int!
+  exitVolumeUsdc: BigInt!
+  buyVolumeUsdc: BigInt!
+  lastTradeAt: BigInt
+  "rateVsNavBps of the most recent trade — the live clearing level for Patient auctions"
+  lastTradeRateVsNavBps: BigInt
+  trades: [Trade!]! @derivedFrom(field: "strategy")
+}
+
+"Live Aqua virtual balance of one token under one strategy"
+type StrategyBalance @entity(immutable: false) {
+  id: Bytes! # strategyHash-token
+  strategy: Strategy!
+  token: Bytes!
+  balance: BigInt!
+  pushedTotal: BigInt!
+  pulledTotal: BigInt!
+  updatedAt: BigInt!
+}
+
+# ----------------------------------------------------------------- trades
+
+"""
+NavExtruction.Trade — one pool fill with full pricing context (emitted inside the official
+router's swap). rateVsNavBps < 0 means execution below oracle NAV (a discount).
+"""
+type Trade @entity(immutable: false) {
+  id: Bytes! # tx-logIndex
+  strategy: Strategy!
+  poolId: Int!
+  asset: Asset!
+  isExit: Boolean!
+  maker: Bytes!
+  taker: Bytes!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  rateVsNavBps: BigInt!
+  "oracle NAV at execution, 1e18 (0 if never set — cannot happen for priced pools)"
+  navAtTrade: BigInt!
+  "implied execution rate, USDC per RWA, 1e18"
+  rate1e18: BigInt!
+  fill: Fill
+  timestamp: BigInt!
+  block: BigInt!
+  txHash: Bytes!
+}
+
+"Official AquaSwapVMRouter.Swapped — the settlement-level view of a fill"
+type Fill @entity(immutable: false) {
+  id: Bytes! # tx-logIndex
+  strategy: Strategy!
+  maker: Bytes!
+  taker: Bytes!
+  tokenIn: Bytes!
+  tokenOut: Bytes!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  trade: Trade
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+# ----------------------------------------------------------------- router
+
+type RouterListing @entity(immutable: false) {
+  id: Bytes! # orderHash
+  asset: Asset!
+  maker: Bytes!
+  registrar: Bytes!
+  active: Boolean!
+  registeredAt: BigInt!
+  delistedAt: BigInt
+}
+
+"OutletRouter execution (best-of across pools / bids / v4)"
+type RouterSwap @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  kind: RouterSwapKind!
+  asset: Asset!
+  user: Account!
+  strategy: Strategy!
+  "RWA for INSTANT_EXIT, USDC for PURCHASE"
+  amountIn: BigInt!
+  "USDC for INSTANT_EXIT, RWA for PURCHASE"
+  amountOut: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+"Patient exit forwarded to the queue through the router"
+type PatientEnqueue @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  asset: Asset!
+  user: Account!
+  epochNumber: BigInt!
+  shares: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type TwapGuard @entity(immutable: false) {
+  id: Bytes! # asset address
+  asset: Asset!
+  source: Bytes!
+  poolId: Bytes!
+  window: BigInt!
+  bandBps: Int!
+  updatedAt: BigInt!
+}
+
+# --------------------------------------------------------- redemption queue
+
+"One ERC-7540 redemption-only vault (one per RWA asset)"
+type Queue @entity(immutable: false) {
+  id: Bytes! # queue address
+  asset: Asset! # the RWA (ERC-7575 share)
+  usdc: Bytes!
+  curator: Bytes!
+  issuer: Bytes!
+  feeRecipient: Bytes!
+  queueFeeBps: Int!
+  issuerWindow: BigInt!
+  currentEpoch: BigInt!
+  lastSettledEpoch: BigInt!
+  lastSettledNav: BigInt!
+  "shares requested, not yet settled"
+  pendingShares: BigInt!
+  "shares settled, not yet claimed"
+  claimableShares: BigInt!
+  totalSharesRequested: BigInt!
+  totalAssetsSettled: BigInt!
+  totalAssetsClaimed: BigInt!
+  totalFeesClaimed: BigInt!
+  requestCount: Int!
+  epochs: [QueueEpoch!]! @derivedFrom(field: "queue")
+}
+
+type QueueEpoch @entity(immutable: false) {
+  id: ID! # queue-epochNumber
+  queue: Queue!
+  epochNumber: BigInt!
+  status: QueueEpochStatus!
+  totalShares: BigInt!
+  sharesClaimed: BigInt!
+  navAtSettle: BigInt
+  "gross settlement cash pulled from the issuer"
+  assetsIn: BigInt
+  firstRequestAt: BigInt
+  submittedAt: BigInt
+  settledAt: BigInt
+  requests: [QueueRequest!]! @derivedFrom(field: "epoch")
+}
+
+"Aggregated ERC-7540 redemption position of one controller in one epoch"
+type QueueRequest @entity(immutable: false) {
+  id: ID! # queue-epochNumber-controller
+  queue: Queue!
+  epoch: QueueEpoch!
+  epochNumber: BigInt!
+  controller: Account!
+  shares: BigInt!
+  sharesClaimed: BigInt!
+  firstRequestAt: BigInt!
+  lastRequestAt: BigInt!
+}
+
+"Per-controller FIFO bookkeeping mirroring the contract's epoch cursor"
+type QueueController @entity(immutable: false) {
+  id: ID! # queue-controller
+  queue: Queue!
+  controller: Bytes!
+  epochNumbers: [BigInt!]!
+  cursor: Int!
+}
+
+"ERC-7540 Withdraw — a settled claim paid out"
+type QueueClaim @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  queue: Queue!
+  sender: Bytes!
+  receiver: Bytes!
+  controller: Account!
+  assets: BigInt!
+  shares: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+# ------------------------------------------------------------ curator vault
+
+"One CuratorVault (risk tier): USDC-only deposits, agent-operated pools"
+type Vault @entity(immutable: false) {
+  id: Bytes! # vault address
+  name: String!
+  symbol: String!
+  curator: Bytes!
+  curatorTreasury: Bytes!
+  curatorFeeBps: Int!
+  maxDiscountFloorBps: Int!
+  "vault share supply, 18 decimals (tracked from mint/burn transfers)"
+  totalShares: BigInt!
+  "wallet USDC (mirrors TokenBalance; includes reserved)"
+  idleUsdc: BigInt!
+  "USDC earmarked for fulfilled, unclaimed LP epochs"
+  reservedAssets: BigInt!
+  currentEpoch: BigInt!
+  totalDeposited: BigInt!
+  totalWithdrawn: BigInt!
+  "shares escrowed in open (unfulfilled) epochs"
+  pendingShares: BigInt!
+  "USDC per share ×1e18, from the last deposit or epoch fulfillment"
+  lastSharePrice: BigInt!
+  depositCount: Int!
+  mandateAssets: [MandateAsset!]! @derivedFrom(field: "vault")
+  pools: [Strategy!]! @derivedFrom(field: "vault")
+  epochs: [VaultEpoch!]! @derivedFrom(field: "vault")
+  positions: [VaultPosition!]! @derivedFrom(field: "vault")
+}
+
+"An RWA in a vault's mandate, with its shipping cap and queue linkage"
+type MandateAsset @entity(immutable: false) {
+  id: ID! # vault-asset
+  vault: Vault!
+  asset: Asset!
+  queue: Queue
+  perAssetCap: BigInt!
+  "RWA shares in flight through the redemption queue (recycled, unclaimed)"
+  queuedShares: BigInt!
+  addedAt: BigInt!
+}
+
+type VaultEpoch @entity(immutable: false) {
+  id: ID! # vault-epochNumber
+  vault: Vault!
+  epochNumber: BigInt!
+  status: VaultEpochStatus!
+  totalShares: BigInt!
+  totalAssets: BigInt
+  sharesClaimed: BigInt!
+  firstRequestAt: BigInt
+  fulfilledAt: BigInt
+}
+
+type VaultRedeemRequest @entity(immutable: false) {
+  id: ID! # vault-epochNumber-controller
+  vault: Vault!
+  epoch: VaultEpoch!
+  epochNumber: BigInt!
+  controller: Account!
+  shares: BigInt!
+  sharesClaimed: BigInt!
+  firstRequestAt: BigInt!
+  lastRequestAt: BigInt!
+}
+
+type VaultController @entity(immutable: false) {
+  id: ID! # vault-controller
+  vault: Vault!
+  controller: Bytes!
+  epochNumbers: [BigInt!]!
+  cursor: Int!
+}
+
+type VaultDeposit @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  vault: Vault!
+  sender: Bytes!
+  owner: Account!
+  assets: BigInt!
+  shares: BigInt!
+  "USDC per share ×1e18 implied by this deposit"
+  sharePrice: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultClaim @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  vault: Vault!
+  sender: Bytes!
+  receiver: Bytes!
+  controller: Account!
+  assets: BigInt!
+  shares: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+"LP share balance per holder (from vault ERC-20 transfers)"
+type VaultPosition @entity(immutable: false) {
+  id: Bytes! # vault-holder
+  vault: Vault!
+  holder: Bytes!
+  shares: BigInt!
+  depositedAssets: BigInt!
+  withdrawnAssets: BigInt!
+  updatedAt: BigInt!
+}
+
+"Curator recycling RWA inventory into the redemption queue (capital-reuse loop)"
+type RecycleAction @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  vault: Vault!
+  asset: Asset!
+  shares: BigInt!
+  queueEpochNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+"Curator claiming settled queue proceeds back into the vault"
+type VaultQueueClaim @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  vault: Vault!
+  asset: Asset!
+  shares: BigInt!
+  proceeds: BigInt!
+  curatorFee: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+# --------------------------------------------------------------- v4 lane
+
+"Uniswap v4 RWA/USDC pool observed by RWAGateHook"
+type V4Pool @entity(immutable: false) {
+  id: Bytes! # v4 PoolId
+  "set once the router's TWAP guard links the pool to an asset"
+  asset: Asset
+  lastSqrtPriceX96: BigInt!
+  "last USDC-per-RWA spot, 1e18 (0 when not derivable)"
+  lastRate1e18: BigInt!
+  observationCount: Int!
+  lastObservationAt: BigInt!
+  observations: [Observation!]! @derivedFrom(field: "pool")
+}
+
+type Observation @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  pool: V4Pool!
+  sqrtPriceX96: BigInt!
+  "USDC-per-RWA spot, 1e18 (0 when not derivable)"
+  rate1e18: BigInt!
+  cumulativeX128: BigInt!
+  timestamp: BigInt!
+  block: BigInt!
+}
+
+# ------------------------------------------------------- accounts & tokens
+
+type Account @entity(immutable: false) {
+  id: Bytes! # address
+  firstSeenAt: BigInt!
+  routerSwaps: [RouterSwap!]! @derivedFrom(field: "user")
+  queueRequests: [QueueRequest!]! @derivedFrom(field: "controller")
+  vaultRequests: [VaultRedeemRequest!]! @derivedFrom(field: "controller")
+  drips: [FaucetDrip!]! @derivedFrom(field: "to")
+}
+
+"ERC-20 balance per tracked token per holder (USDC, RWAs)"
+type TokenBalance @entity(immutable: false) {
+  id: Bytes! # token-holder
+  token: Asset!
+  holder: Bytes!
+  balance: BigInt!
+  updatedAt: BigInt!
+}
+
+"ERC-7540 operator approvals on queues and vaults (the agent auto-claim hook)"
+type OperatorApproval @entity(immutable: false) {
+  id: Bytes! # contract-controller-operator
+  contract: Bytes!
+  controller: Bytes!
+  operator: Bytes!
+  approved: Boolean!
+  updatedAt: BigInt!
+}
+
+type FaucetDrip @entity(immutable: true) {
+  id: Bytes! # tx-logIndex
+  to: Account!
+  caller: Bytes!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+# -------------------------------------------------------------- internals
+
+"Helper linking a Trade to the Swapped fill of the same tx+order (not for querying)"
+type _TxOrderTrade @entity(immutable: false) {
+  id: Bytes! # txHash-orderHash
+  trade: Trade!
+}
