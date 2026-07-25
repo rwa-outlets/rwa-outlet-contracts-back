@@ -1,9 +1,13 @@
 import { KeeperSet, NavUpdated } from "../generated/NavOracle/NavOracle";
-import { NavPoint, OracleKeeper } from "../generated/schema";
-import { assetDay, ensureAsset, eventId } from "./helpers";
+import { Asset, NavPoint, OracleKeeper } from "../generated/schema";
+import { assetDay, eventId } from "./helpers";
 
 export function handleNavUpdated(event: NavUpdated): void {
-  const asset = ensureAsset(event.params.asset);
+  // Only track NAVs for tokens this subgraph indexes (their mint transfers create the
+  // Asset first). The shared oracle also carries quotes for stale/scrapped token
+  // deployments, which would otherwise surface as duplicate-symbol phantom assets.
+  const asset = Asset.load(event.params.asset);
+  if (asset == null) return;
   asset.nav = event.params.nav;
   asset.navUpdatedAt = event.params.timestamp;
   asset.save();

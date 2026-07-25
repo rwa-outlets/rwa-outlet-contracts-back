@@ -14,7 +14,7 @@ import { OperatorApproval, Queue, QueueClaim, QueueController, QueueEpoch, Queue
 import { ensureAccount, ensureAsset, eventId, ONE, ZERO } from "./helpers";
 import { USDC } from "./addresses";
 
-function ensureQueue(address: Address, timestamp: BigInt): Queue {
+export function ensureQueue(address: Address, timestamp: BigInt): Queue {
   let queue = Queue.load(address);
   if (queue != null) return queue;
 

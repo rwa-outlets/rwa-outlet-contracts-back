@@ -1,13 +1,31 @@
+import { Address } from "@graphprotocol/graph-ts";
+
 import {
   GuardSet,
   InstantExit,
   PatientEnqueued,
   Purchase,
+  QueueSet,
   StrategyDelisted,
   StrategyRegistered,
 } from "../generated/OutletRouter/OutletRouter";
 import { PatientEnqueue, RouterListing, RouterSwap, TwapGuard } from "../generated/schema";
 import { ensureAccount, ensureAsset, ensureStrategy, ensureV4Pool, eventId } from "./helpers";
+import { ensureQueue } from "./queue";
+
+/// Creates the Queue entity as soon as the router points an asset at it, so the
+/// agent can discover queue configs before the first redemption request lands.
+/// Asset.queue always tracks the router's canonical queue; superseded queues keep
+/// their entities but lose the back-reference.
+export function handleQueueSet(event: QueueSet): void {
+  const asset = ensureAsset(event.params.asset);
+  if (event.params.queue.equals(Address.zero())) {
+    asset.queue = null;
+  } else {
+    asset.queue = ensureQueue(event.params.queue, event.block.timestamp).id;
+  }
+  asset.save();
+}
 
 export function handleStrategyRegistered(event: StrategyRegistered): void {
   const asset = ensureAsset(event.params.asset);

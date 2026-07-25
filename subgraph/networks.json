@@ -25,12 +25,12 @@
       "startBlock": 11348471
     },
     "RedemptionQueueTbill": {
-      "address": "0xBf14ed0b9E2d3A167f9119082440A91C9C810472",
-      "startBlock": 11348471
+      "address": "0x782Ee6AA667022A90b5b5522781Ad19aA6C9eD2D",
+      "startBlock": 11348733
     },
     "RedemptionQueueCredit": {
-      "address": "0xb12EE4D7f546C5B6Cb3EcC2b770B9b6780354502",
-      "startBlock": 11348471
+      "address": "0x8eCaFB95ff1E251A9198a766DbECD626bC1d6431",
+      "startBlock": 11348733
     },
     "CuratorVaultExpress": {
       "address": "0x4AaAB2c212dA4d261E5F50F5A97B5d2d3892E204",

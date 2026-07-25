@@ -73,6 +73,8 @@ type Asset @entity(immutable: false) {
   "latest oracle NAV, 1e18 (null until first NavUpdated)"
   nav: BigInt
   navUpdatedAt: BigInt
+  "router's current redemption queue for this asset (OutletRouter.setQueue); superseded queues stay as Queue entities but are no longer referenced here"
+  queue: Queue
   navHistory: [NavPoint!]! @derivedFrom(field: "asset")
   tradeCount: Int!
   "RWA units sold into pools (exits), token decimals"

@@ -5,6 +5,12 @@ The Graph indexer over the RWA Outlets engine on **Ethereum Sepolia** (addresses
 source the AI curator agent reads — every decision is a subgraph query → reasoning →
 onchain action, per `docs/02-engine-spec.md` §7 (data flows one way).
 
+**Live deployment** — Studio slug `rwa-outlet-contracts-core`:
+
+- Studio: <https://thegraph.com/studio/subgraph/rwa-outlet-contracts-core>
+- Query endpoint: `https://api.studio.thegraph.com/query/1756992/rwa-outlet-contracts-core/<version>`
+  (current version `v0.1.1`; use `/version/latest` once the subgraph is published)
+
 ## What is indexed
 
 | Data source | Events | Entities |
@@ -14,7 +20,7 @@ onchain action, per `docs/02-engine-spec.md` §7 (data flows one way).
 | `NavExtruction` | `Trade` | `Trade` — full pricing context: pool id, direction, `rateVsNavBps`, NAV at execution |
 | `NavOracle` | `NavUpdated`, `KeeperSet` | `Asset.nav`, `NavPoint` history, `OracleKeeper` |
 | `ComplianceNFT` | `Transfer`, `OperatorSet` | `KycHolder` (the KYC set), `ComplianceOperator` |
-| `OutletRouter` | `StrategyRegistered/Delisted`, `GuardSet`, `InstantExit`, `Purchase`, `PatientEnqueued` | `RouterListing`, `RouterSwap`, `PatientEnqueue`, `TwapGuard` |
+| `OutletRouter` | `QueueSet`, `StrategyRegistered/Delisted`, `GuardSet`, `InstantExit`, `Purchase`, `PatientEnqueued` | `RouterListing`, `RouterSwap`, `PatientEnqueue`, `TwapGuard`; `Asset.queue` = the router's canonical queue (superseded queues keep their entities but lose the pointer) |
 | `RedemptionQueue` ×2 | `RedeemRequest`, `Submitted`, `Settled`, `Withdraw`, `OperatorSet`, `FeesClaimed`, `RolesSet` | `Queue`, `QueueEpoch`, `QueueRequest` (FIFO-attributed claims), `QueueClaim` |
 | `CuratorVault` ×2 | `Deposit`, `RedeemRequest`, `Withdraw`, `EpochFulfilled`, `MandateAssetAdded`, `PoolCreated/Docked`, `Recycled`, `QueueClaimed`, `RolesSet`, `Transfer` | `Vault`, `VaultEpoch`, `VaultRedeemRequest`, `VaultDeposit`, `VaultPosition`, `MandateAsset`, `RecycleAction`, `VaultQueueClaim` |
 | `RWAGateHook` | `ObservationRecorded` (new + legacy signature) | `V4Pool`, `Observation` — secondary-market price series |
@@ -36,7 +42,7 @@ npm run sync      # regenerate abis/ + addresses from ../../rwa-outlet-contracts
 npm run build     # graph codegen + graph build --network sepolia
 
 graph auth $GRAPH_DEPLOY_KEY
-npm run deploy    # deploys studio slug "rwa-outlets" — change in package.json if needed
+npm run deploy    # deploys studio slug "rwa-outlet-contracts-core" (pass --version-label vX.Y.Z)
 ```
 
 ### After a contract redeploy
@@ -73,12 +79,13 @@ Patient-pool clearing level (e.g. "auction clears > 250 bps below NAV for 6h →
 }
 ```
 
-Queue backlog aging + settlement triggers:
+Queue backlog aging + settlement triggers (start from `assets.queue` — that's the
+router's *current* queue; `queues` also lists superseded instances):
 
 ```graphql
 {
-  queues { id asset { symbol } pendingShares claimableShares currentEpoch lastSettledNav }
-  queueEpochs(where: { status_not: SETTLED }) {
+  assets(where: { kind: RWA }) { symbol queue { id pendingShares claimableShares currentEpoch lastSettledNav } }
+  queueEpoches(where: { status_not: SETTLED }) {  # graph-node pluralizes Epoch as "Epoches"
     queue { id }
     epochNumber
     status

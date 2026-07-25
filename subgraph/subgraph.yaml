@@ -156,12 +156,18 @@ dataSources:
         - TwapGuard
         - Strategy
         - V4Pool
+        - Asset
+        - Queue
       abis:
         - name: OutletRouter
           file: ./abis/OutletRouter.json
         - name: RWAToken
           file: ./abis/RWAToken.json
+        - name: RedemptionQueue
+          file: ./abis/RedemptionQueue.json
       eventHandlers:
+        - event: QueueSet(indexed address,address)
+          handler: handleQueueSet
         - event: StrategyRegistered(indexed address,indexed bytes32,indexed
             address,address)
           handler: handleStrategyRegistered
@@ -181,9 +187,9 @@ dataSources:
     name: RedemptionQueueTbill
     network: sepolia
     source:
-      address: "0xBf14ed0b9E2d3A167f9119082440A91C9C810472"
+      address: "0x782Ee6AA667022A90b5b5522781Ad19aA6C9eD2D"
       abi: RedemptionQueue
-      startBlock: 11348471
+      startBlock: 11348733
     mapping: &a1
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -222,9 +228,9 @@ dataSources:
     name: RedemptionQueueCredit
     network: sepolia
     source:
-      address: "0xb12EE4D7f546C5B6Cb3EcC2b770B9b6780354502"
+      address: "0x8eCaFB95ff1E251A9198a766DbECD626bC1d6431"
       abi: RedemptionQueue
-      startBlock: 11348471
+      startBlock: 11348733
     mapping: *a1
   - kind: ethereum
     name: CuratorVaultExpress
@@ -251,11 +257,14 @@ dataSources:
         - Strategy
         - OperatorApproval
         - Account
+        - Queue
       abis:
         - name: CuratorVault
           file: ./abis/CuratorVault.json
         - name: RWAToken
           file: ./abis/RWAToken.json
+        - name: RedemptionQueue
+          file: ./abis/RedemptionQueue.json
       eventHandlers:
         - event: Deposit(indexed address,indexed address,uint256,uint256)
           handler: handleDeposit

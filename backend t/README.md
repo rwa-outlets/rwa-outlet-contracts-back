@@ -49,5 +49,6 @@ npm run dev
 
 Built and pushed per `terraform/README.md` — `docker build -t
 registry.digitalocean.com/rwa-outlets/backend:main ./backend`. Terraform
-supplies `PORT`, `MONGO_URI`, `JWT_SECRET`, `FRONTEND_URL`, `BASE_URL` as pod
-env vars; `src/env.js` fails fast if any required var is missing.
+supplies `PORT`, `MONGO_URI`, `JWT_SECRET`, `FRONTEND_URL`, `BASE_URL`,
+`SUBGRAPH_URL`, `GROQ_MODEL`, and `GROQ_API_KEY` (secret) as pod env vars;
+`src/env.js` fails fast if any required var is missing.

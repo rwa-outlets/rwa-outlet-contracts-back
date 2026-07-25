@@ -29,6 +29,7 @@ import {
   VaultRedeemRequest,
 } from "../generated/schema";
 import { ensureAccount, ensureAsset, ensureStrategy, eventId, ONE, ZERO } from "./helpers";
+import { ensureQueue } from "./queue";
 import { SWAP_VM } from "./addresses";
 
 const E30 = BigInt.fromI32(10).pow(30);
@@ -303,7 +304,12 @@ export function handleMandateAssetAdded(event: MandateAssetAdded): void {
     mandate.queuedShares = ZERO;
     mandate.addedAt = event.block.timestamp;
   }
-  mandate.queue = event.params.queue.equals(Address.zero()) ? null : event.params.queue;
+  if (event.params.queue.equals(Address.zero())) {
+    mandate.queue = null;
+  } else {
+    // materialize the Queue entity so the mandate's queue reference resolves immediately
+    mandate.queue = ensureQueue(event.params.queue, event.block.timestamp).id;
+  }
   mandate.perAssetCap = event.params.perAssetCap;
   mandate.save();
 }

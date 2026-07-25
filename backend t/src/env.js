@@ -17,6 +17,13 @@ const env = {
   JWT_SECRET: required('JWT_SECRET', 'dev-only-secret-change-me'),
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   BASE_URL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+  // Curator agent: live subgraph reads + Groq LLM calls. The endpoint is public;
+  // the key has no dev fallback on purpose — agent routes must handle it missing.
+  SUBGRAPH_URL:
+    process.env.SUBGRAPH_URL ||
+    'https://api.studio.thegraph.com/query/1756962/rwa-outlets-base/version/latest',
+  GROQ_API_KEY: process.env.GROQ_API_KEY || '',
+  GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
 };
 
 module.exports = env;

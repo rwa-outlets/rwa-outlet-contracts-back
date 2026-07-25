@@ -7,7 +7,7 @@
     "sync": "bash scripts/sync-abis.sh && node scripts/sync-addresses.mjs",
     "codegen": "graph codegen",
     "build": "graph codegen && graph build --network sepolia",
-    "deploy": "graph deploy rwa-outlets --network sepolia",
+    "deploy": "graph deploy rwa-outlet-contracts-core --network sepolia",
     "test": "graph codegen && graph build --network sepolia"
   },
   "devDependencies": {
