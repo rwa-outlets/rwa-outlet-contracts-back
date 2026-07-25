@@ -100,7 +100,8 @@ router.post('/v1/chat/completions', async (req, res) => {
     const status = err.code === 'AGENT_NOT_CONFIGURED' ? 503
       : err.code === 'AGENT_TIMEOUT' ? 504
         : err.code === 'SUBGRAPH_TOOL_ERROR' || err.status === 401 ? 502
-          : 500;
+          : err.status === 429 || err.status === 413 ? 503
+            : 500;
     return res.status(status).json({
       error: { message: publicError(err), type: 'server_error' },
     });
@@ -109,7 +110,7 @@ router.post('/v1/chat/completions', async (req, res) => {
 
 function publicError(err) {
   if (err.code === 'AGENT_NOT_CONFIGURED') {
-    return 'Chat is not configured on this deployment (set GROQ_API_KEY or ANTHROPIC_API_KEY, plus SUBGRAPH_URL).';
+    return 'Chat is not configured on this deployment (set OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY, plus SUBGRAPH_URL).';
   }
   if (err.code === 'AGENT_TIMEOUT') {
     return 'The assistant ran out of time answering this — try a narrower question.';
@@ -123,7 +124,15 @@ function publicError(err) {
     return 'The chat provider rejected the configured API key — check GROQ_API_KEY / ANTHROPIC_API_KEY.';
   }
   if (err.status === 404 && /model/i.test(err.message || '')) {
-    return 'The configured model was not found on the provider — check GROQ_MODEL.';
+    return 'The configured model was not found on the provider — check OPENAI_MODEL / GROQ_MODEL.';
+  }
+  if (err.code === 'insufficient_quota' || err.error?.code === 'insufficient_quota') {
+    return 'The chat provider account is out of credits — add billing on the provider dashboard.';
+  }
+  // 413 = the transcript no longer fits the provider's per-minute token window
+  // (Groq free tier caps TPM org-wide), so retrying the same question won't help.
+  if (err.status === 413) {
+    return 'This question needs more context than the provider\'s free-tier token window allows — ask something narrower.';
   }
   if (err.status === 429) {
     return 'The chat provider is rate-limiting us — try again in a moment.';
