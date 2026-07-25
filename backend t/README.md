@@ -44,6 +44,25 @@ npm run dev
 | GET | `/api/curator-agents` | curator agent status |
 | GET | `/api/notifications?user=` | per-user notifications |
 | POST | `/api/notifications/:id/read` | mark read |
+| POST | `/api/v1/chat/completions` | OpenAI-compatible chat — Claude agent over the subgraph (supports `stream: true`) |
+| GET | `/api/v1/models` | OpenAI-compatible model listing |
+
+## Chat agent
+
+`POST /api/v1/chat/completions` is an OpenAI-compatible facade: point any OpenAI
+client at baseURL `<backend>/api/v1` (any `model` value is accepted; the server
+picks its own). Behind it, an LLM runs a tool-use loop against the subgraph MCP
+server (`src/mcp/subgraph-server.js`), which exposes `get_subgraph_schema` and
+`query_subgraph` — so answers about pools, trades, NAV, queues, and vaults come
+from indexed chain state, not mock data. The MCP server runs in-process
+(in-memory transport — no extra port or process).
+
+Providers: Groq (`GROQ_API_KEY` + `GROQ_MODEL`, OpenAI-compatible) is preferred
+when set; Anthropic (`ANTHROPIC_API_KEY`, defaults to `claude-opus-5` with
+server-side refusal fallbacks) otherwise. `SUBGRAPH_URL` is required either way;
+with no provider key the route answers 503 and the rest of the API works as
+before. The MCP server also runs standalone for Claude Desktop / other MCP
+hosts: `SUBGRAPH_URL=... npm run mcp` (stdio transport).
 
 ## Deploy
 

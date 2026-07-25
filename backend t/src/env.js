@@ -17,6 +17,13 @@ const env = {
   JWT_SECRET: required('JWT_SECRET', 'dev-only-secret-change-me'),
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   BASE_URL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+  // Chat agent (optional — /api/v1/chat/completions returns 503 when no
+  // provider key is set). Groq is preferred when both keys are present.
+  GROQ_API_KEY: process.env.GROQ_API_KEY || null,
+  GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || null,
+  ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
+  SUBGRAPH_URL: process.env.SUBGRAPH_URL || null,
 };
 
 module.exports = env;
