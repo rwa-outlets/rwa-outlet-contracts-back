@@ -3,13 +3,13 @@ import { env } from "./env.js";
 import { registerRoutes } from "./routes/index.js";
 
 const app = Fastify({
-  logger: {
-    level: env.NODE_ENV === "production" ? "info" : "debug",
-    transport:
-      env.NODE_ENV === "production"
-        ? undefined
-        : { target: "pino-pretty", options: { colorize: true } },
-  },
+  logger:
+    env.NODE_ENV === "production"
+      ? { level: "info" }
+      : {
+          level: "debug",
+          transport: { target: "pino-pretty", options: { colorize: true } },
+        },
 });
 
 // DO App Platform health check depends on this staying at GET /health, 200.
