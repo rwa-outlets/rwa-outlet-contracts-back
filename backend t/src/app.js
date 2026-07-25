@@ -20,6 +20,7 @@ api.use(require('./routes/queue'));
 api.use(require('./routes/vaults'));
 api.use(require('./routes/dashboard'));
 api.use(require('./routes/notifications'));
+api.use(require('./routes/chat'));
 app.use('/api', api);
 
 app.use((req, res) => {
