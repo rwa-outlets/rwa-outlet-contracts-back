@@ -19,6 +19,35 @@ const PROVIDER = env.GROQ_API_KEY ? 'groq' : (env.ANTHROPIC_API_KEY ? 'anthropic
 const MODEL = PROVIDER === 'groq' ? env.GROQ_MODEL : env.ANTHROPIC_MODEL;
 const MAX_TOOL_ITERATIONS = 10;
 
+// A run must finish inside the caller's time budget (the nginx ingress kills
+// upstreams at ~60s, so non-streaming requests get a deadline below that).
+function timeLeft(deadline) {
+  return deadline - Date.now();
+}
+
+function makeError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+// Aborts a run when the same tool keeps failing the same way (e.g. subgraph
+// auth misconfig) instead of letting the model spin through every iteration.
+function makeToolFailureTracker() {
+  const counts = new Map();
+  return (toolName, errorText) => {
+    const key = `${toolName}|${errorText.slice(0, 160)}`;
+    const n = (counts.get(key) || 0) + 1;
+    counts.set(key, n);
+    if (n >= 2) {
+      throw makeError(
+        'SUBGRAPH_TOOL_ERROR',
+        `The subgraph tools keep failing: ${errorText.slice(0, 300)}`,
+      );
+    }
+  };
+}
+
 // Stable system prompt — no timestamps or per-request content, so providers
 // with prompt caching keep a byte-identical prefix.
 const SYSTEM_PROMPT = `You are the RWA Outlets analyst — the AI assistant for RWA Outlets, an instant-liquidity market for tokenized real-world assets (RWAs).
@@ -122,7 +151,7 @@ let groqClient = null;
 // once the window resets when we trip the limit mid-loop.
 const GROQ_MAX_COMPLETION_TOKENS = Number(process.env.GROQ_MAX_COMPLETION_TOKENS || 2048);
 
-async function groqCreateWithRetry(params, attempts = 3) {
+async function groqCreateWithRetry(params, deadline, attempts = 3) {
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await groqClient.chat.completions.create(params);
@@ -135,13 +164,15 @@ async function groqCreateWithRetry(params, attempts = 3) {
       const retryAfter = rateLimited
         ? (Number(err.headers?.get?.('retry-after')) || 10) : 1;
       const waitMs = Math.min(retryAfter, 30) * 1000;
+      // Never wait past the run's deadline — fail now with the real error.
+      if (waitMs + 2000 > timeLeft(deadline)) throw err;
       console.log(`[agent] groq rate-limited, retrying in ${waitMs / 1000}s (attempt ${attempt}/${attempts})`);
       await new Promise((r) => { setTimeout(r, waitMs); });
     }
   }
 }
 
-async function runGroq(openaiMessages, onTextDelta) {
+async function runGroq(openaiMessages, onTextDelta, deadline) {
   if (!groqClient) groqClient = new Groq({ apiKey: env.GROQ_API_KEY });
   const { tools } = await getMcp();
   const { extraSystem, turns } = normalizeMessages(openaiMessages);
@@ -157,11 +188,16 @@ async function runGroq(openaiMessages, onTextDelta) {
 
   const usage = { input_tokens: 0, output_tokens: 0 };
   const collected = [];
+  const trackToolFailure = makeToolFailureTracker();
   // Qwen/QwQ/DeepSeek on Groq are reasoning models — keep <think> out of output.
   const reasoning = /qwen|qwq|deepseek|r1|gpt-oss/i.test(MODEL)
     ? { reasoning_format: 'hidden' } : {};
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i += 1) {
+    if (timeLeft(deadline) < 3000) {
+      if (collected.length) return { text: collected.join('\n\n'), usage, stopReason: 'timeout' };
+      throw makeError('AGENT_TIMEOUT', 'Ran out of time before producing an answer');
+    }
     const stream = await groqCreateWithRetry({
       model: MODEL,
       messages,
@@ -169,7 +205,7 @@ async function runGroq(openaiMessages, onTextDelta) {
       max_completion_tokens: GROQ_MAX_COMPLETION_TOKENS,
       stream: true,
       ...reasoning,
-    });
+    }, deadline);
 
     let content = '';
     let finishReason = null;
@@ -218,7 +254,8 @@ async function runGroq(openaiMessages, onTextDelta) {
         console.log(`[agent] tool ${call.name}`);
         let input = {};
         try { input = call.arguments ? JSON.parse(call.arguments) : {}; } catch { /* leave {} */ }
-        const { text } = await callMcpTool(call.name, input);
+        const { text, isError } = await callMcpTool(call.name, input);
+        if (isError) trackToolFailure(call.name, text);
         messages.push({ role: 'tool', tool_call_id: call.id, content: text });
       }
       continue;
@@ -238,7 +275,7 @@ async function runGroq(openaiMessages, onTextDelta) {
 
 let anthropicClient = null;
 
-async function runClaude(openaiMessages, onTextDelta) {
+async function runClaude(openaiMessages, onTextDelta, deadline) {
   if (!anthropicClient) anthropicClient = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const { tools } = await getMcp();
   const { extraSystem, turns } = normalizeMessages(openaiMessages);
@@ -251,8 +288,13 @@ async function runClaude(openaiMessages, onTextDelta) {
 
   const usage = { input_tokens: 0, output_tokens: 0 };
   const collected = [];
+  const trackToolFailure = makeToolFailureTracker();
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i += 1) {
+    if (timeLeft(deadline) < 3000) {
+      if (collected.length) return { text: collected.join('\n\n'), usage, stopReason: 'timeout' };
+      throw makeError('AGENT_TIMEOUT', 'Ran out of time before producing an answer');
+    }
     const stream = anthropicClient.beta.messages.stream({
       model: MODEL,
       max_tokens: 16000,
@@ -289,6 +331,7 @@ async function runClaude(openaiMessages, onTextDelta) {
       for (const tu of toolUses) {
         console.log(`[agent] tool ${tu.name}`);
         const { text, isError } = await callMcpTool(tu.name, tu.input);
+        if (isError) trackToolFailure(tu.name, text);
         results.push({
           type: 'tool_result', tool_use_id: tu.id, content: text, is_error: isError,
         });
@@ -318,16 +361,17 @@ async function runClaude(openaiMessages, onTextDelta) {
 // ------------------------------------------------------------------ dispatch
 
 // Runs the full tool-use loop. onTextDelta (optional) receives assistant text
-// as it streams. Resolves with { text, usage, stopReason }.
-async function runAgent(openaiMessages, onTextDelta) {
+// as it streams; timeBudgetMs bounds the whole run (default 50s — under the
+// ingress's ~60s upstream timeout). Resolves with { text, usage, stopReason }.
+async function runAgent(openaiMessages, onTextDelta, timeBudgetMs) {
   if (!PROVIDER) {
-    const err = new Error('No chat provider configured (set GROQ_API_KEY or ANTHROPIC_API_KEY)');
-    err.code = 'AGENT_NOT_CONFIGURED';
-    throw err;
+    throw makeError('AGENT_NOT_CONFIGURED', 'No chat provider configured (set GROQ_API_KEY or ANTHROPIC_API_KEY)');
   }
+  const budget = timeBudgetMs || Number(process.env.AGENT_TIME_BUDGET_MS || 50_000);
+  const deadline = Date.now() + budget;
   return PROVIDER === 'groq'
-    ? runGroq(openaiMessages, onTextDelta)
-    : runClaude(openaiMessages, onTextDelta);
+    ? runGroq(openaiMessages, onTextDelta, deadline)
+    : runClaude(openaiMessages, onTextDelta, deadline);
 }
 
 module.exports = { runAgent, MODEL, PROVIDER };
