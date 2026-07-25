@@ -220,6 +220,7 @@ async function runOpenAIStyle(openaiMessages, onTextDelta, deadline) {
     : { stream_options: { include_usage: true } };
   const maxCompletionTokens = PROVIDER === 'groq'
     ? GROQ_MAX_COMPLETION_TOKENS : OPENAI_MAX_COMPLETION_TOKENS;
+  let streamRetries = 0;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i += 1) {
     if (timeLeft(deadline) < 3000) {
@@ -240,31 +241,46 @@ async function runOpenAIStyle(openaiMessages, onTextDelta, deadline) {
     const toolCalls = [];
     let firstDeltaOfTurn = true;
 
-    for await (const chunk of stream) {
-      const choice = chunk.choices && chunk.choices[0];
-      if (choice) {
-        const delta = choice.delta || {};
-        if (delta.content) {
-          if (onTextDelta) {
-            if (firstDeltaOfTurn && collected.length > 0) onTextDelta('\n\n');
-            firstDeltaOfTurn = false;
-            onTextDelta(delta.content);
+    try {
+      for await (const chunk of stream) {
+        const choice = chunk.choices && chunk.choices[0];
+        if (choice) {
+          const delta = choice.delta || {};
+          if (delta.content) {
+            if (onTextDelta) {
+              if (firstDeltaOfTurn && collected.length > 0) onTextDelta('\n\n');
+              firstDeltaOfTurn = false;
+              onTextDelta(delta.content);
+            }
+            content += delta.content;
           }
-          content += delta.content;
+          for (const tc of delta.tool_calls || []) {
+            const slot = toolCalls[tc.index] || (toolCalls[tc.index] = { id: '', name: '', arguments: '' });
+            if (tc.id) slot.id = tc.id;
+            if (tc.function && tc.function.name) slot.name += tc.function.name;
+            if (tc.function && tc.function.arguments) slot.arguments += tc.function.arguments;
+          }
+          if (choice.finish_reason) finishReason = choice.finish_reason;
         }
-        for (const tc of delta.tool_calls || []) {
-          const slot = toolCalls[tc.index] || (toolCalls[tc.index] = { id: '', name: '', arguments: '' });
-          if (tc.id) slot.id = tc.id;
-          if (tc.function && tc.function.name) slot.name += tc.function.name;
-          if (tc.function && tc.function.arguments) slot.arguments += tc.function.arguments;
+        const u = (chunk.x_groq && chunk.x_groq.usage) || chunk.usage;
+        if (u) {
+          usage.input_tokens += u.prompt_tokens || 0;
+          usage.output_tokens += u.completion_tokens || 0;
         }
-        if (choice.finish_reason) finishReason = choice.finish_reason;
       }
-      const u = (chunk.x_groq && chunk.x_groq.usage) || chunk.usage;
-      if (u) {
-        usage.input_tokens += u.prompt_tokens || 0;
-        usage.output_tokens += u.completion_tokens || 0;
+    } catch (err) {
+      // Groq aborts the SSE stream mid-generation when the model emits
+      // malformed tool-call JSON (in-band error, no HTTP status). Re-issue
+      // the turn — but only if no text streamed yet, so clients never see
+      // duplicated output.
+      const flakyGeneration = /parse tool call|tool_use_failed|failed_generation/i
+        .test(err.message || '');
+      if (flakyGeneration && !content && streamRetries < 2 && timeLeft(deadline) > 5000) {
+        streamRetries += 1;
+        console.log(`[agent] ${PROVIDER} stream flaked mid-generation, retrying turn (${streamRetries}/2)`);
+        continue;
       }
+      throw err;
     }
 
     if (content) collected.push(content);
