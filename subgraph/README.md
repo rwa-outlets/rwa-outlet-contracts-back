@@ -8,8 +8,11 @@ onchain action, per `docs/02-engine-spec.md` §7 (data flows one way).
 **Live deployment** — Studio slug `rwa-outlet-contracts-core`:
 
 - Studio: <https://thegraph.com/studio/subgraph/rwa-outlet-contracts-core>
-- Query endpoint: `https://api.studio.thegraph.com/query/1756992/rwa-outlet-contracts-core/<version>`
-  (current version `v0.2.1`; use `/version/latest` once the subgraph is published)
+- Studio query endpoint (free, no key): `https://api.studio.thegraph.com/query/1756992/rwa-outlet-contracts-core/<version>`
+  (current version `v0.2.1`)
+- Published to the decentralized network — gateway endpoint (requires an API key
+  sent as `Authorization: Bearer`):
+  `https://gateway.thegraph.com/api/deployments/id/Qmb6FUopoDYFrHBZvAazMBH9qsrNVcSgtz8jmUAGKzSqMu`
 
 ## What is indexed
 
