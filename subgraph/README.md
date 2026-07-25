@@ -9,7 +9,7 @@ onchain action, per `docs/02-engine-spec.md` §7 (data flows one way).
 
 - Studio: <https://thegraph.com/studio/subgraph/rwa-outlet-contracts-core>
 - Query endpoint: `https://api.studio.thegraph.com/query/1756992/rwa-outlet-contracts-core/<version>`
-  (current version `v0.1.1`; use `/version/latest` once the subgraph is published)
+  (current version `v0.2.1`; use `/version/latest` once the subgraph is published)
 
 ## What is indexed
 
@@ -20,7 +20,8 @@ onchain action, per `docs/02-engine-spec.md` §7 (data flows one way).
 | `NavExtruction` | `Trade` | `Trade` — full pricing context: pool id, direction, `rateVsNavBps`, NAV at execution |
 | `NavOracle` | `NavUpdated`, `KeeperSet` | `Asset.nav`, `NavPoint` history, `OracleKeeper` |
 | `ComplianceNFT` | `Transfer`, `OperatorSet` | `KycHolder` (the KYC set), `ComplianceOperator` |
-| `OutletRouter` | `QueueSet`, `StrategyRegistered/Delisted`, `GuardSet`, `InstantExit`, `Purchase`, `PatientEnqueued` | `RouterListing`, `RouterSwap`, `PatientEnqueue`, `TwapGuard`; `Asset.queue` = the router's canonical queue (superseded queues keep their entities but lose the pointer) |
+| `OutletRouter` (+ `OutletRouterLegacy`, the pre-v4 deployment) | `QueueSet`, `V4VenueSet`, `StrategyRegistered/Delisted`, `GuardSet`, `InstantExit`, `Purchase`, `PatientEnqueued` | `RouterListing`, `RouterSwap` (with `venue: AQUA \| V4` — for v4 fills `orderHash` is the PoolId, so `strategy` is null and `v4Pool` is set), `PatientEnqueue`, `TwapGuard`; `Asset.queue` = the router's canonical queue |
+| `V4Venue` | `PoolRegistered`, `V4Swapped` | `V4Pool` config (`fee`, `tickSpacing`, `hooks`) + `Asset.v4Pool` link, `V4Swap` per venue fill, USDC volume rollup on the pool |
 | `RedemptionQueue` ×2 | `RedeemRequest`, `Submitted`, `Settled`, `Withdraw`, `OperatorSet`, `FeesClaimed`, `RolesSet` | `Queue`, `QueueEpoch`, `QueueRequest` (FIFO-attributed claims), `QueueClaim` |
 | `CuratorVault` ×2 | `Deposit`, `RedeemRequest`, `Withdraw`, `EpochFulfilled`, `MandateAssetAdded`, `PoolCreated/Docked`, `Recycled`, `QueueClaimed`, `RolesSet`, `Transfer` | `Vault`, `VaultEpoch`, `VaultRedeemRequest`, `VaultDeposit`, `VaultPosition`, `MandateAsset`, `RecycleAction`, `VaultQueueClaim` |
 | `RWAGateHook` | `ObservationRecorded` (new + legacy signature) | `V4Pool`, `Observation` — secondary-market price series |
@@ -138,10 +139,25 @@ Vault health (LP flows, free vs reserved cash, recycling in flight):
 }
 ```
 
-Secondary-lane sanity (program quote vs v4 TWAP context):
+Secondary-lane sanity (program quote vs v4 TWAP context, venue flow):
 
 ```graphql
 {
-  v4Pools { id asset { symbol } lastRate1e18 lastObservationAt observationCount }
+  v4Pools {
+    id
+    asset { symbol }
+    fee
+    lastRate1e18
+    lastObservationAt
+    observationCount
+    swapCount
+    volumeUsdc
+  }
+  routerSwaps(where: { venue: V4 }) { kind amountIn amountOut timestamp }
 }
 ```
+
+The router redeployed at block 11349348 when the v4 lane shipped (state carried over by
+`MigrateRouterState.s.sol`); `OutletRouterLegacy` keeps the pre-migration swap history
+indexed. Listings re-registered during the migration keep one `RouterListing` entity —
+`registeredAt` reflects the re-registration.
