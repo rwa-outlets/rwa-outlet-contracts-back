@@ -23,7 +23,7 @@ const env = {
   // so GRAPH_API_KEY must be set alongside it (sent as Authorization: Bearer).
   SUBGRAPH_URL:
     process.env.SUBGRAPH_URL ||
-    'https://gateway.thegraph.com/api/deployments/id/QmURaPZkHnH4v4zKjYLZFKsL26KwYr4yonLMv4jXwPKWhe',
+    'https://gateway.thegraph.com/api/deployments/id/Qmb6FUopoDYFrHBZvAazMBH9qsrNVcSgtz8jmUAGKzSqMu',
   GRAPH_API_KEY: process.env.GRAPH_API_KEY || null,
   GROQ_API_KEY: process.env.GROQ_API_KEY || null,
   GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
