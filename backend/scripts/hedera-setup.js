@@ -95,7 +95,10 @@ async function main() {
   client.close();
 }
 
-main().catch((err) => {
+main().then(() => {
+  // The SDK's gRPC keep-alives hold the event loop open — exit explicitly.
+  process.exit(0);
+}).catch((err) => {
   console.error('hedera-setup failed:', err.message);
   process.exit(1);
 });
