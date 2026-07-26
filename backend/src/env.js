@@ -31,6 +31,18 @@ const env = {
   GROQ_MODEL: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || null,
   ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
+  // Hedera agentic payments (optional — the whole feature is off until both
+  // HEDERA_ACCOUNT_ID and HEDERA_PRIVATE_KEY are set). Testnet keys only.
+  HEDERA_ACCOUNT_ID: process.env.HEDERA_ACCOUNT_ID || null,
+  HEDERA_PRIVATE_KEY: process.env.HEDERA_PRIVATE_KEY || null,
+  HEDERA_NETWORK: process.env.HEDERA_NETWORK || 'testnet',
+  // HCS audit topic (created by scripts/hedera-setup.js; pin to keep one trail).
+  HEDERA_HCS_TOPIC_ID: process.env.HEDERA_HCS_TOPIC_ID || null,
+  // Where per-query data fees go (second testnet account; fees are skipped when unset).
+  HEDERA_FEE_COLLECTOR_ID: process.env.HEDERA_FEE_COLLECTOR_ID || null,
+  HEDERA_QUERY_FEE_HBAR: Number(process.env.HEDERA_QUERY_FEE_HBAR || '0.001'),
+  // Hard cap for the agent-facing hedera_transfer_hbar tool.
+  HEDERA_MAX_TRANSFER_HBAR: Number(process.env.HEDERA_MAX_TRANSFER_HBAR || '10'),
 };
 
 module.exports = env;

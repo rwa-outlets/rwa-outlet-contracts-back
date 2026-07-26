@@ -46,6 +46,8 @@ npm run dev
 | POST | `/api/notifications/:id/read` | mark read |
 | POST | `/api/v1/chat/completions` | OpenAI-compatible chat — Claude agent over the subgraph (supports `stream: true`) |
 | GET | `/api/v1/models` | OpenAI-compatible model listing |
+| GET | `/api/hedera/status` | agent treasury on Hedera testnet: operator, balance, HCS topic |
+| GET | `/api/hedera/receipts` | last 50 autonomous settlements (payments + HCS logs) with hashscan links |
 
 ## Chat agent
 
@@ -66,11 +68,63 @@ and the rest of the API works as before. The MCP server also runs standalone
 for Claude Desktop / other MCP hosts: `SUBGRAPH_URL=... GRAPH_API_KEY=... npm
 run mcp` (stdio transport).
 
+## Hedera — agentic payments (hackathon judges: start here)
+
+The curator agent settles its economics on **Hedera testnet**, integrated
+directly with `@hashgraph/sdk` (qualifying path: *"Hedera SDKs directly"*).
+Two payment flows, both autonomous:
+
+1. **Per-query data fees.** Every chat/curator run that reads the subgraph is
+   metered: after the answer is produced, the backend **pays
+   `HEDERA_QUERY_FEE_HBAR × queries`** from the agent treasury to the
+   fee-collector account (memo `rwa-outlets:data-fee:<n>q`) and **appends the
+   decision record** — question, tools used, fee tx id, answer preview — to a
+   public **HCS audit topic**. Fire-and-forget: Hedera is the payment rail,
+   never a dependency of answering. This is the x402-style pay-per-use pattern
+   with the agent as the paying party.
+2. **Agent-initiated transfers.** The LLM holds a `hedera_transfer_hbar` tool
+   (plus `hedera_get_treasury`, `hedera_log_decision`) — ask the agent to
+   settle a fee and it executes the transfer itself and cites the hashscan
+   link. Amounts are capped server-side by `HEDERA_MAX_TRANSFER_HBAR`.
+
+Architecture (mirrors the subgraph MCP design — in-process, no extra port):
+
+```text
+chat request ─▶ LLM tool loop (src/services/agent.js)
+                  ├─ subgraph MCP  (src/mcp/subgraph-server.js) ── The Graph
+                  └─ hedera MCP    (src/mcp/hedera-server.js)  ─┐
+                after answer: settleAgentRun()                  ├─ @hashgraph/sdk
+                  (src/services/hedera.js) ─────────────────────┘   Hedera testnet
+                  ├─ TransferTransaction  → per-query fee (hashscan link)
+                  └─ TopicMessageSubmit   → HCS decision record (hashscan link)
+```
+
+Every settlement is exposed at **`GET /api/hedera/receipts`** (last 50, each
+with its `hashscan.io/testnet` link) and **`GET /api/hedera/status`** (operator
+account, live balance, topic id). That receipts feed is the demo evidence.
+
+Setup (testnet keys only — never funded mainnet keys):
+
+```bash
+# 1. create + fund an account at https://portal.hedera.com (faucet)
+# 2. in .env: HEDERA_ACCOUNT_ID=0.0.xxxx  HEDERA_PRIVATE_KEY=<der/ecdsa hex>
+npm run hedera:setup   # creates HCS topic + fee-collector, sends proof txs,
+                       # prints hashscan links and the env ids to pin
+# 3. pin the printed HEDERA_HCS_TOPIC_ID / HEDERA_FEE_COLLECTOR_ID in .env
+npm run dev
+```
+
+Files: [`src/services/hedera.js`](src/services/hedera.js) (SDK integration:
+transfers, HCS, settlement hook), [`src/mcp/hedera-server.js`](src/mcp/hedera-server.js)
+(the agent's treasury tools; also standalone via `npm run mcp:hedera`),
+[`src/routes/hedera.js`](src/routes/hedera.js) (receipts/status),
+[`scripts/hedera-setup.js`](scripts/hedera-setup.js) (one-shot bootstrap).
+
 ## Deploy
 
 Built and pushed per `terraform/README.md` — `docker build -t
 registry.digitalocean.com/rwa-outlets/backend:main ./backend`. Terraform
 supplies `PORT`, `MONGO_URI`, `JWT_SECRET`, `FRONTEND_URL`, `BASE_URL`,
-`SUBGRAPH_URL`, `GRAPH_API_KEY` (secret), `GROQ_MODEL`, and `GROQ_API_KEY`
-(secret) as pod env vars;
-`src/env.js` fails fast if any required var is missing.
+`SUBGRAPH_URL`, `GRAPH_API_KEY` (secret), `GROQ_MODEL`, `GROQ_API_KEY`
+(secret), and the `HEDERA_*` treasury vars (`HEDERA_PRIVATE_KEY` as a secret)
+as pod env vars; `src/env.js` fails fast if any required var is missing.

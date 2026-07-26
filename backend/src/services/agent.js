@@ -16,6 +16,8 @@ const OpenAI = require('openai');
 const { Client: McpClient } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { server: subgraphServer } = require('../mcp/subgraph-server');
+const { server: hederaServer } = require('../mcp/hedera-server');
+const hedera = require('../services/hedera');
 const env = require('../env');
 
 const PROVIDER = env.OPENAI_API_KEY ? 'openai'
@@ -63,6 +65,14 @@ Your only source of chain state is the RWA Outlets subgraph (The Graph), reached
 - query_subgraph: executes a GraphQL query against it
 
 The schema returned by get_subgraph_schema is the source of truth for what is indexed — call it before writing your first query in a conversation, and again whenever a query errors with an unknown field. Typical entities include swaps/trades, redemptions and redemption queues, NAV updates, deposits/withdrawals, vault positions, and KYC events.
+${hedera.isConfigured() ? `
+You also control the curator treasury on Hedera testnet, through three tools:
+- hedera_get_treasury: operator account, HBAR balance, HCS audit-topic and hashscan.io links
+- hedera_transfer_hbar: execute an HBAR payment (e.g. settle a curator or service fee) — use it when the user asks you to pay, settle, or transfer value on Hedera
+- hedera_log_decision: append a notable decision to the public HCS audit topic
+
+Every data-driven answer you give is also settled autonomously in the background: the backend pays a per-subgraph-query data fee on Hedera and appends the decision record to the HCS audit topic. After any Hedera tool call, always cite the returned hashscan.io link so the user can verify the transaction onchain.
+` : ''}
 
 Conventions when interpreting data:
 - USDC amounts have 6 decimals; RWA token amounts 18 decimals; NAV values are fixed-point 1e18 (1e18 = 1.00 USDC per token)
@@ -80,23 +90,37 @@ How to answer:
 
 let mcpPromise = null;
 
-// The MCP server lives in this same process — client and server are wired
-// through an in-memory transport pair, so no child process and no port.
-async function connectMcp() {
+// The MCP servers live in this same process — each client/server pair is wired
+// through an in-memory transport, so no child processes and no ports. The
+// Hedera server is only connected when treasury keys are configured, so the
+// model never sees tools that cannot work.
+async function connectOneServer(mcpServer, clientName) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await subgraphServer.connect(serverTransport);
-
-  const client = new McpClient({ name: 'rwa-outlets-backend', version: '1.0.0' });
+  await mcpServer.connect(serverTransport);
+  const client = new McpClient({ name: clientName, version: '1.0.0' });
   await client.connect(clientTransport);
-
   const { tools } = await client.listTools();
+  return { client, tools };
+}
+
+async function connectMcp() {
+  const servers = [{ server: subgraphServer, name: 'rwa-outlets-backend' }];
+  if (hedera.isConfigured()) servers.push({ server: hederaServer, name: 'rwa-outlets-backend-hedera' });
+
+  const toolClients = new Map(); // tool name → connected client
+  const mcpTools = [];
+  for (const s of servers) {
+    const { client, tools } = await connectOneServer(s.server, s.name);
+    for (const t of tools) {
+      toolClients.set(t.name, client);
+      mcpTools.push({ name: t.name, description: t.description, input_schema: t.inputSchema });
+    }
+  }
   // Sorted + stable shape → deterministic tools block → prompt cache hits.
-  const mcpTools = tools
-    .map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  mcpTools.sort((a, b) => a.name.localeCompare(b.name));
 
   console.log(`[agent] MCP connected (in-process) — tools: ${mcpTools.map((t) => t.name).join(', ')}`);
-  return { client, tools: mcpTools };
+  return { toolClients, tools: mcpTools };
 }
 
 function getMcp() {
@@ -109,8 +133,14 @@ function getMcp() {
   return mcpPromise;
 }
 
-async function callMcpTool(name, input) {
-  const { client } = await getMcp();
+async function callMcpTool(name, input, stats) {
+  const { toolClients } = await getMcp();
+  const client = toolClients.get(name);
+  if (!client) return { text: `Unknown tool: ${name}`, isError: true };
+  if (stats) {
+    stats.tools.push(name);
+    if (name === 'query_subgraph') stats.queries += 1;
+  }
   try {
     const result = await client.callTool({ name, arguments: input || {} });
     const text = (result.content || [])
@@ -195,7 +225,7 @@ async function createWithRetry(client, params, deadline, attempts = 3) {
   }
 }
 
-async function runOpenAIStyle(openaiMessages, onTextDelta, deadline) {
+async function runOpenAIStyle(openaiMessages, onTextDelta, deadline, stats) {
   const client = getOpenAIStyleClient();
   const { tools } = await getMcp();
   const { extraSystem, turns } = normalizeMessages(openaiMessages);
@@ -302,7 +332,7 @@ async function runOpenAIStyle(openaiMessages, onTextDelta, deadline) {
         console.log(`[agent] tool ${call.name}`);
         let input = {};
         try { input = call.arguments ? JSON.parse(call.arguments) : {}; } catch { /* leave {} */ }
-        const { text, isError } = await callMcpTool(call.name, input);
+        const { text, isError } = await callMcpTool(call.name, input, stats);
         if (isError) trackToolFailure(call.name, text);
         messages.push({ role: 'tool', tool_call_id: call.id, content: text });
       }
@@ -323,7 +353,7 @@ async function runOpenAIStyle(openaiMessages, onTextDelta, deadline) {
 
 let anthropicClient = null;
 
-async function runClaude(openaiMessages, onTextDelta, deadline) {
+async function runClaude(openaiMessages, onTextDelta, deadline, stats) {
   if (!anthropicClient) anthropicClient = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const { tools } = await getMcp();
   const { extraSystem, turns } = normalizeMessages(openaiMessages);
@@ -378,7 +408,7 @@ async function runClaude(openaiMessages, onTextDelta, deadline) {
       const results = [];
       for (const tu of toolUses) {
         console.log(`[agent] tool ${tu.name}`);
-        const { text, isError } = await callMcpTool(tu.name, tu.input);
+        const { text, isError } = await callMcpTool(tu.name, tu.input, stats);
         if (isError) trackToolFailure(tu.name, text);
         results.push({
           type: 'tool_result', tool_use_id: tu.id, content: text, is_error: isError,
@@ -408,6 +438,27 @@ async function runClaude(openaiMessages, onTextDelta, deadline) {
 
 // ------------------------------------------------------------------ dispatch
 
+// After a run that touched tools, settle it on Hedera (fire-and-forget): pay
+// the per-subgraph-query data fee and append the decision to the HCS audit
+// topic. Never blocks or fails the chat response — Hedera is the payment rail,
+// not a dependency of answering.
+function settleRunOnHedera(openaiMessages, result, stats) {
+  if (!hedera.isConfigured() || stats.tools.length === 0) return;
+  const lastUser = [...(openaiMessages || [])].reverse()
+    .find((m) => m.role === 'user' && typeof m.content === 'string');
+  hedera.settleAgentRun({
+    model: MODEL,
+    question: lastUser ? lastUser.content : '',
+    tools: stats.tools,
+    queries: stats.queries,
+    answerPreview: result.text || '',
+  }).then(({ feePayment, decision }) => {
+    console.log(`[hedera] run settled — fee: ${feePayment ? feePayment.hashscanUrl : 'skipped (no collector or no queries)'}; HCS #${decision.sequenceNumber}: ${decision.hashscanUrl}`);
+  }).catch((err) => {
+    console.warn(`[hedera] run settlement failed: ${err.message}`);
+  });
+}
+
 // Runs the full tool-use loop. onTextDelta (optional) receives assistant text
 // as it streams; timeBudgetMs bounds the whole run (default 50s — under the
 // ingress's ~60s upstream timeout). Resolves with { text, usage, stopReason }.
@@ -417,9 +468,12 @@ async function runAgent(openaiMessages, onTextDelta, timeBudgetMs) {
   }
   const budget = timeBudgetMs || Number(process.env.AGENT_TIME_BUDGET_MS || 50_000);
   const deadline = Date.now() + budget;
-  return PROVIDER === 'anthropic'
-    ? runClaude(openaiMessages, onTextDelta, deadline)
-    : runOpenAIStyle(openaiMessages, onTextDelta, deadline);
+  const stats = { tools: [], queries: 0 };
+  const result = PROVIDER === 'anthropic'
+    ? await runClaude(openaiMessages, onTextDelta, deadline, stats)
+    : await runOpenAIStyle(openaiMessages, onTextDelta, deadline, stats);
+  settleRunOnHedera(openaiMessages, result, stats);
+  return result;
 }
 
 module.exports = { runAgent, MODEL, PROVIDER };

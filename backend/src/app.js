@@ -21,6 +21,7 @@ api.use(require('./routes/vaults'));
 api.use(require('./routes/dashboard'));
 api.use(require('./routes/notifications'));
 api.use(require('./routes/chat'));
+api.use(require('./routes/hedera'));
 app.use('/api', api);
 
 app.use((req, res) => {
